@@ -1,11 +1,11 @@
 # GatherPress Relations
 
-**Contributors:** carstenbach
-**Tags:** block, person, relations, event
-**Tested up to:** 6.8
-**Stable tag:** 0.1.0
-**License:** GPLv2 or later
-**License URI:** <https://www.gnu.org/licenses/gpl-2.0.html>
+**Contributors:** carstenbach  
+**Tags:** block, person, relations, event  
+**Tested up to:** 6.8  
+**Stable tag:** 0.1.0  
+**License:** GPLv2 or later  
+**License URI:** <https://www.gnu.org/licenses/gpl-2.0.html>  
 
 [![Playground Demo Link](https://img.shields.io/badge/WordPress_Playground-blue?logo=wordpress&logoColor=%23fff&labelColor=%233858e9&color=%233858e9)](https://playground.wordpress.net/?blueprint-url=https://raw.githubusercontent.com/carstingaxion/gatherpress-relations/main/.wordpress-org/blueprints/blueprint.json) [![Build, test & measure](https://github.com/carstingaxion/gatherpress-relations/actions/workflows/build-test-measure.yml/badge.svg?branch=main)](https://github.com/carstingaxion/gatherpress-relations/actions/workflows/build-test-measure.yml)
 
