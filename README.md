@@ -11,6 +11,8 @@
 
 Connects persons to events, productions, or any post type — with individual roles per relation. Built on GatherPress shadow taxonomies and WordPress `post_type_supports`.
 
+![Frontend walkthrough using the normal GatherPress demo data plus some new persons to relate events to.](.wordpress-org/gatherpress-relations-frontend.gif)
+
 ## Description
 
 GatherPress Relations registers a `gatherpress_person` post type and a relationship system that lets you assign people to any supporting post type with a specific role. A person can be a *Speaker* at one meetup, a *Host* at another, and a *Moderator* at a third — each connection carries its own role and department.
