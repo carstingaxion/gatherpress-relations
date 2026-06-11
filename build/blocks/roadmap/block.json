@@ -1,0 +1,70 @@
+{
+  "$schema": "https://schemas.wp.org/trunk/block.json",
+  "apiVersion": 3,
+  "name": "gatherpress/relations-roadmap",
+  "version": "0.1.0",
+  "title": "GatherPress Relations Roadmap",
+  "category": "widgets",
+  "icon": "networking",
+  "description": "A comprehensive architectural roadmap for connecting persons to productions (or any special post type) with roles in WordPress — powered by GatherPress shadow taxonomies, covering data modeling, block design, and scaling strategies.",
+  "example": {
+    "attributes": {
+      "showDataModeling": true,
+      "showCastCrew": true,
+      "showEnsemble": true,
+      "showVisualizations": true,
+      "showScaling": true,
+      "showImplementation": true
+    }
+  },
+  "attributes": {
+    "showDataModeling": {
+      "type": "boolean",
+      "default": true
+    },
+    "showCastCrew": {
+      "type": "boolean",
+      "default": true
+    },
+    "showEnsemble": {
+      "type": "boolean",
+      "default": true
+    },
+    "showVisualizations": {
+      "type": "boolean",
+      "default": true
+    },
+    "showScaling": {
+      "type": "boolean",
+      "default": true
+    },
+    "showImplementation": {
+      "type": "boolean",
+      "default": true
+    }
+  },
+  "supports": {
+    "html": false,
+    "align": [
+      "wide",
+      "full"
+    ],
+    "spacing": {
+      "margin": true,
+      "padding": true
+    },
+    "color": {
+      "background": true,
+      "text": true
+    },
+    "typography": {
+      "fontSize": true
+    }
+  },
+  "textdomain": "gatherpress-relations",
+  "editorScript": "file:./index.js",
+  "editorStyle": "file:./index.css",
+  "style": "file:./style-index.css",
+  "viewScript": "file:./view.js",
+  "render": "file:./render.php"
+}

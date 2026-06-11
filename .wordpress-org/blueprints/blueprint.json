@@ -1,0 +1,75 @@
+{
+  "$schema": "https://playground.wordpress.net/blueprint-schema.json",
+  "landingPage": "/wp-admin/edit.php?post_type=gatherpress_person",
+  "preferredVersions": {
+    "php": "8.2",
+    "wp": "latest"
+  },
+  "features": {
+    "networking": true
+  },
+  "steps": [
+    {
+      "step": "setSiteOptions",
+      "options": {
+        "blogname": "GatherPress Relations",
+        "blogdescription": "Enhancing GatherPress with Person Relations.",
+        "users_can_register": 1,
+        "permalink_structure": "/%year%/%monthnum%/%postname%/"
+      }
+    },
+    {
+      "step": "defineWpConfigConsts",
+      "consts": {
+          "GATHERPRESS_ALPHA_VERSION": 1
+      }
+    },
+    {
+      "step": "login",
+      "username": "admin"
+    },
+		{
+			"step": "installPlugin",
+			"pluginData": {
+				"resource": "url",
+				"url": "https://github.com/GatherPress/gatherpress/releases/download/0.34.0-alpha.2/gatherpress.0.34.0-alpha.2.zip"
+			},
+      "options": {
+          "activate": true
+      }
+		},
+    {
+      "step": "installPlugin",
+      "pluginData": {
+        "resource": "git:directory",
+        "url": "https://github.com/carstingaxion/gatherpress-relations",
+        "ref": "HEAD"
+      },
+      "options": {
+        "activate": true
+      },
+      "progress": {
+        "caption": "Installing plugin from GitHub: carstingaxion/gatherpress-relations"
+      }
+    },
+    {
+      "step": "importWxr",
+      "file": {
+        "resource": "url",
+        "url": "https://raw.githubusercontent.com/GatherPress/gatherpress-demo-data/main/GatherPress-demo-data-0.34.0.xml"
+      }
+    },
+		{
+			"step": "writeFile",
+			"path": "/tmp/demo-data.php",
+			"data": {
+				"resource": "url",
+				"url": "https://raw.githubusercontent.com/carstingaxion/gatherpress-relations/main/.wordpress-org/blueprints/demo-data.php"
+			}
+		},
+		{
+			"step": "runPHP",
+			"code": "<?php require '/tmp/demo-data.php';"
+		}
+  ]
+}

@@ -1,0 +1,68 @@
+{
+  "$schema": "https://schemas.wp.org/trunk/block.json",
+  "apiVersion": 3,
+  "name": "gatherpress/cast-crew-list",
+  "version": "0.1.0",
+  "title": "Cast & Crew List",
+  "category": "widgets",
+  "icon": "groups",
+  "description": "Displays a grouped roster of persons connected to this post via the gatherpress-relations system — showing headshots, names, roles, and links to person pages, grouped by department.",
+  "attributes": {
+    "showHeadshots": {
+      "type": "boolean",
+      "default": true
+    },
+    "headShotSize": {
+      "type": "string",
+      "default": "thumbnail"
+    },
+    "showDepartmentHeadings": {
+      "type": "boolean",
+      "default": true
+    },
+    "columns": {
+      "type": "number",
+      "default": 3
+    },
+    "linkToPersonPage": {
+      "type": "boolean",
+      "default": true
+    },
+    "departmentHeadingLevel": {
+      "type": "number",
+      "default": 3
+    },
+    "sourcePostType": {
+      "type": "string",
+      "default": "gatherpress_person"
+    }
+  },
+  "usesContext": [
+    "postId",
+    "postType",
+    "queryId"
+  ],
+  "supports": {
+    "html": false,
+    "align": [
+      "wide",
+      "full"
+    ],
+    "spacing": {
+      "margin": true,
+      "padding": true
+    },
+    "color": {
+      "background": true,
+      "text": true
+    },
+    "typography": {
+      "fontSize": true
+    }
+  },
+  "textdomain": "gatherpress-relations",
+  "editorScript": "file:./index.js",
+  "editorStyle": "file:./index.css",
+  "style": "file:./style-index.css",
+  "render": "file:./render.php"
+}

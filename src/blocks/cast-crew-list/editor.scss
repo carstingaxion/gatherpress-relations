@@ -1,0 +1,26 @@
+/**
+ * Editor-only styles for the Cast & Crew List block.
+ *
+ * NOTE: Since WordPress 6.0+ the editor canvas runs inside an iframe.
+ * Styles in this file are injected INTO the iframe and can only target
+ * elements rendered inside the editor canvas (the block preview).
+ *
+ * Sidebar panel styles (InspectorControls — search results, entry list,
+ * drag handles, inline editing) live in the PARENT document and are
+ * enqueued via GatherPress_Relations_Plugin::enqueue_sidebar_styles()
+ * on the `enqueue_block_editor_assets` hook.
+ *
+ * This file contains ONLY canvas-side overrides.
+ *
+ * @package GatherPressRelations
+ */
+
+.wp-block-gatherpress-cast-crew-list {
+	/**
+	 * Ensure the placeholder inherits the block's visual baseline
+	 * inside the iframe canvas.
+	 */
+	.components-placeholder {
+		min-height: 120px;
+	}
+}

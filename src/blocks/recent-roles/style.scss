@@ -1,0 +1,318 @@
+/**
+ * Shared styles for the Person Recent Roles block.
+ *
+ * Applied in both editor and frontend contexts via block.json's
+ * `style` asset. Uses BEM naming with `recent-roles` as the block name.
+ *
+ * HOW the grid works:
+ * ───────────────────
+ * The <ul> is a CSS Grid with four explicit columns:
+ *   1. Production title — takes flexible space (minmax).
+ *   2. Role name — takes flexible space (minmax).
+ *   3. Metadata badges (department, post type) — auto-sized.
+ *   4. Date — auto-sized.
+ * Each <li> uses `display: contents` so its child divs participate
+ * directly in the parent grid. `.item-main` also uses `display:
+ * contents` so the title and role each occupy their own grid column.
+ * This gives true cross-row alignment for all four columns.
+ *
+ * @package GatherPressRelations
+ */
+
+.wp-block-gatherpress-person-recent-roles {
+	max-width: 100%;
+	line-height: 1.5;
+	container-type: inline-size;
+	container-name: recent-roles-block;
+
+	/**
+	 * Color inheritance is handled by the base styles using `inherit`,
+	 * `currentColor`, and semi-transparent rgba values throughout.
+	 * This ensures colors cascade from ANY ancestor container —
+	 * not only when applied directly to this block.
+	 *
+	 * No `.has-text-color` or `.has-background` overrides are needed
+	 * because the base styles already use inheriting values.
+	 */
+}
+
+.recent-roles {
+	/**
+	 * Block title — "Recent Roles" heading.
+	 */
+	&__title {
+		font-size: 1.1rem;
+		font-weight: 700;
+		margin: 0 0 1rem;
+		color: inherit;
+		padding-bottom: 0.5rem;
+		border-bottom: 2px solid rgba(128, 128, 128, 0.2);
+	}
+
+	/**
+	 * Department group — wraps a group heading + list.
+	 */
+	&__group {
+		margin-bottom: 1.5rem;
+
+		&:last-child {
+			margin-bottom: 0;
+		}
+	}
+
+	&__group-title {
+		font-size: 0.8rem;
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+		color: inherit;
+		opacity: 0.6;
+		margin: 0 0 0.5rem;
+	}
+
+	/**
+	 * Role list — CSS Grid with four explicit columns.
+	 *
+	 * Four columns:
+	 *   1. minmax(120px, auto) — production title, flexible.
+	 *   2. minmax(80px, auto) — role name, sized to content with minimum.
+	 *   3. 1fr — metadata badges (department, post type).
+	 *   4. auto — date string.
+	 *
+	 * WHY subgrid on each <li>?
+	 * Using `display: contents` on the <li> removes its box model,
+	 * which means per-cell `border-bottom` lines can misalign by 1px
+	 * across columns (different rounding per cell). Subgrid keeps the
+	 * <li> as a real grid item with its own box — so a single
+	 * `border-bottom` on the <li> draws one unbroken line — while
+	 * its children still participate in the parent grid's column tracks.
+	 */
+	&__list {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: grid;
+		grid-template-columns: minmax(120px, auto) minmax(80px, auto) 1fr auto;
+		column-gap: 0.2rem;
+		align-items: baseline;
+
+		@container recent-roles-block (max-width: 600px) {
+			grid-template-columns: 1fr auto;
+		}
+
+		@container recent-roles-block (max-width: 480px) {
+			display: flex;
+			flex-direction: column;
+		}
+	}
+
+	/**
+	 * Individual role item — uses subgrid for column alignment.
+	 *
+	 * WHY subgrid instead of display: contents?
+	 * Subgrid keeps the <li> as a real box so we can place a single
+	 * `border-bottom` on it — one unbroken line across all columns.
+	 * `display: contents` removes the box, forcing each child cell
+	 * to draw its own border, which can misalign by 1px due to
+	 * sub-pixel rounding differences.
+	 *
+	 * The <li> spans all 4 parent columns (`grid-column: 1 / -1`)
+	 * and inherits the parent's column tracks via `subgrid`.
+	 */
+	&__item {
+		display: grid;
+		grid-column: 1 / -1;
+		grid-template-columns: subgrid;
+		align-items: baseline;
+		padding: 0.6rem 0;
+		border-bottom: 1px solid rgba(128, 128, 128, 0.15);
+
+		&:last-child {
+			border-bottom: none;
+		}
+
+		@container recent-roles-block (max-width: 480px) {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 0.25rem;
+		}
+	}
+
+	/**
+	 * Main content area — production title and role name.
+	 *
+	 * Uses display: contents so the title and role each occupy
+	 * their own grid column (columns 1 and 2) within the <li>'s
+	 * subgrid.
+	 */
+	&__item-main {
+		display: contents;
+
+		@container recent-roles-block (max-width: 480px) {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 0 0.4rem;
+			width: 100%;
+		}
+	}
+
+	/**
+	 * Consumer post link — the production or event title.
+	 * Occupies grid column 1.
+	 */
+	&__consumer-link {
+		font-size: 0.95rem;
+		// font-weight: 600;
+		// color: var(--gpr-color-primary, #3b82f6);
+		// text-decoration: none;
+		transition: color 0.15s ease;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+
+		&:hover {
+			// color: var(--gpr-color-primary-hover, #2563eb);
+			// text-decoration: underline;
+		}
+
+		&:focus-visible {
+			outline: 2px solid var(--gpr-color-primary, #3b82f6);
+			outline-offset: 2px;
+			border-radius: 2px;
+		}
+
+		@container recent-roles-block (max-width: 480px) {
+			white-space: normal;
+		}
+	}
+
+	/**
+	 * Role name — "Hamlet", "Director".
+	 * Occupies grid column 2.
+	 */
+	&__role-name {
+		font-size: 0.88rem;
+		font-style: italic;
+		color: inherit;
+		opacity: 0.65;
+		white-space: nowrap;
+
+		@container recent-roles-block (max-width: 480px) {
+			white-space: normal;
+		}
+	}
+
+	/**
+	 * Metadata area — badges and date.
+	 *
+	 * Spans grid columns 3 and 4 as a single flex container so
+	 * badges and date sit inline and align across rows.
+	 */
+	&__item-meta {
+		display: flex;
+		align-items: baseline;
+		justify-content: flex-end;
+		flex-wrap: nowrap;
+		gap: 0.5rem;
+		white-space: nowrap;
+		grid-column: 3 / -1;
+
+		@container recent-roles-block (max-width: 600px) {
+			grid-column: 2 / -1;
+		}
+
+		@container recent-roles-block (max-width: 480px) {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 0.5rem;
+			justify-content: flex-start;
+			white-space: normal;
+		}
+	}
+
+	/**
+	 * On narrow containers, collapse to 2 columns: (title+role) | meta.
+	 * The role moves back inline with the title.
+	 */
+	@container recent-roles-block (max-width: 600px) {
+		&__item-main {
+			display: flex;
+			flex-wrap: wrap;
+			align-items: baseline;
+			gap: 0 0.4rem;
+			min-width: 0;
+		}
+
+		&__role-name {
+			&::before {
+				content: "\00a0 ";
+				font-style: normal;
+			}
+		}
+	}
+
+	/**
+	 * Department badge — small pill-shaped label.
+	 *
+	 * WHY rgba background?
+	 * Semi-transparent backgrounds adapt to any inherited color
+	 * scheme from ancestor containers. The badge text inherits
+	 * the parent's color at reduced opacity for visual hierarchy.
+	 */
+	&__department-badge {
+		font-size: 0.7rem;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		color: inherit;
+		opacity: 0.8;
+		background: rgba(128, 128, 128, 0.12);
+		padding: 0.15em 0.5em;
+		border-radius: 4px;
+		white-space: nowrap;
+	}
+
+	/**
+	 * Post type badge — "Production", "Event".
+	 */
+	&__type-badge {
+		font-size: 0.7rem;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		color: inherit;
+		opacity: 0.8;
+		background: rgba(128, 128, 128, 0.12);
+		padding: 0.15em 0.5em;
+		border-radius: 4px;
+		white-space: nowrap;
+	}
+
+	/**
+	 * Date label.
+	 */
+	&__date {
+		font-size: 0.8rem;
+		color: inherit;
+		opacity: 0.6;
+		white-space: nowrap;
+	}
+
+	/**
+	 * Loading state in the editor.
+	 */
+	&__loading {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 1rem;
+		color: inherit;
+		opacity: 0.6;
+		font-size: 0.9rem;
+
+		p {
+			margin: 0;
+		}
+	}
+}

@@ -1,0 +1,608 @@
+/**
+ * Shared styles for the GatherPress Relations Roadmap block.
+ *
+ * NAMING CONVENTION: BEM (Block Element Modifier)
+ * ────────────────────────────────────────────────
+ * Block:    .gatherpress-relations
+ * Element:  .gatherpress-relations__toc
+ * Modifier: .gatherpress-relations__section--collapsed
+ *
+ * WHY BEM?
+ * BEM produces flat, predictable selectors that avoid specificity wars,
+ * are easy to grep, and map cleanly to component boundaries.
+ *
+ * WHY nested?
+ * SCSS nesting mirrors the DOM tree, making it easy to see which
+ * styles belong to which sub-component. Each nesting level corresponds
+ * to a BEM element or modifier.
+ *
+ * HOW colours work:
+ * We use CSS custom properties with fallback values so the block
+ * inherits theme tokens when available but remains legible in any theme.
+ *
+ * @package GatherPressRelations
+ */
+
+/* ──────────────────────────────────────────────
+ * CSS Custom Properties — design tokens
+ * ────────────────────────────────────────────── */
+:root {
+	/**
+	 * WHY custom properties?
+	 * They let us define the palette once and reference it everywhere.
+	 * A theme can override these via its own :root declaration or
+	 * through theme.json custom values.
+	 */
+	--gpr-color-bg: #f9fafb;
+	--gpr-color-surface: #ffffff;
+	--gpr-color-border: #e2e8f0;
+	--gpr-color-text: #1e293b;
+	--gpr-color-text-muted: #64748b;
+	--gpr-color-primary: #3b82f6;
+	--gpr-color-primary-hover: #2563eb;
+	--gpr-color-primary-light: #eff6ff;
+	--gpr-color-accent: #8b5cf6;
+	--gpr-color-accent-light: #f5f3ff;
+	--gpr-color-success: #10b981;
+	--gpr-color-success-light: #ecfdf5;
+	--gpr-color-warning: #f59e0b;
+	--gpr-color-warning-light: #fffbeb;
+	--gpr-color-code-bg: #1e293b;
+	--gpr-color-code-text: #e2e8f0;
+	--gpr-radius-sm: 6px;
+	--gpr-radius-md: 10px;
+	--gpr-radius-lg: 16px;
+	--gpr-shadow-sm: 0 1px 3px rgb(0 0 0 / 0.08);
+	--gpr-shadow-md: 0 4px 12px rgb(0 0 0 / 0.1);
+	--gpr-font-mono: "SF Mono", "Fira Code", "Cascadia Code", "Consolas", monospace;
+}
+
+/* ──────────────────────────────────────────────
+ * Block root
+ * ────────────────────────────────────────────── */
+.wp-block-gatherpress-relations-roadmap {
+	/**
+	 * WHY max-width on the block root?
+	 * When the block is used without "wide" or "full" alignment, this
+	 * caps the content width for comfortable reading (~80ch).
+	 * The wide/full alignment classes override this via WordPress's
+	 * built-in alignment styles.
+	 */
+	max-width: 100%;
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+	line-height: 1.65;
+	color: var(--gpr-color-text);
+}
+
+/* ──────────────────────────────────────────────
+ * Roadmap wrapper — holds TOC + sections
+ * ────────────────────────────────────────────── */
+.gatherpress-relations {
+	/**
+	 * WHY a two-column grid?
+	 * The left column holds the sticky table of contents (TOC).
+	 * The right column holds the scrollable roadmap sections.
+	 * On mobile (<768px) this collapses to a single column.
+	 */
+	display: grid;
+	grid-template-columns: 260px 1fr;
+	gap: 2rem;
+	position: relative;
+
+	/**
+	 * Responsive: single column on narrow viewports.
+	 */
+	@media (max-width: 899px) {
+		grid-template-columns: 1fr;
+	}
+
+	/* ── Table of Contents ────────────────────── */
+
+	/**
+	 * The TOC sidebar. Sticks to the top of the viewport so the user
+	 * can navigate sections without scrolling back up.
+	 *
+	 * WHY sticky?
+	 * Long roadmap content can span many viewport-heights. A sticky
+	 * TOC keeps navigation always within reach.
+	 *
+	 * HOW the active state works:
+	 * view.js uses IntersectionObserver to detect which section is
+	 * in view, then toggles .gatherpress-relations__toc-link--active
+	 * on the corresponding TOC link.
+	 */
+	&__toc {
+		position: sticky;
+		top: calc(var(--wp-admin--admin-bar--height, 0px) + 2rem);
+		align-self: start;
+		background: var(--gpr-color-surface);
+		border: 1px solid var(--gpr-color-border);
+		border-radius: var(--gpr-radius-lg);
+		padding: 1.5rem;
+		box-shadow: var(--gpr-shadow-sm);
+		max-height: calc(100vh - var(--wp-admin--admin-bar--height, 0px) - 4rem);
+		overflow-y: auto;
+
+		@media (max-width: 899px) {
+			/**
+			 * On mobile the TOC is not sticky — it flows inline
+			 * above the content so it doesn't consume permanent
+			 * screen real-estate.
+			 */
+			position: static;
+			max-height: none;
+		}
+	}
+
+	&__toc-title {
+		font-size: 0.75rem;
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+		color: var(--gpr-color-text-muted);
+		margin: 0 0 1rem;
+		padding-bottom: 0.75rem;
+		border-bottom: 1px solid var(--gpr-color-border);
+	}
+
+	&__toc-list {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+	}
+
+	&__toc-item {
+		margin: 0;
+		padding: 0;
+	}
+
+	/**
+	 * TOC link — each link targets a section by ID.
+	 *
+	 * WHY a left border instead of background?
+	 * A left-border indicator is a common pattern in documentation
+	 * UIs (VS Code, GitHub). It draws the eye without occluding
+	 * the label text.
+	 */
+	&__toc-link {
+		display: block;
+		padding: 0.5rem 0.75rem;
+		font-size: 0.85rem;
+		color: var(--gpr-color-text-muted);
+		text-decoration: none;
+		border-left: 3px solid transparent;
+		border-radius: 0 var(--gpr-radius-sm) var(--gpr-radius-sm) 0;
+		transition: all 0.2s ease;
+
+		&:hover {
+			color: var(--gpr-color-primary);
+			background: var(--gpr-color-primary-light);
+			border-left-color: var(--gpr-color-primary);
+		}
+
+		/**
+		 * Active state — applied by view.js when the section
+		 * enters the viewport via IntersectionObserver.
+		 */
+		&--active {
+			color: var(--gpr-color-primary);
+			background: var(--gpr-color-primary-light);
+			border-left-color: var(--gpr-color-primary);
+			font-weight: 600;
+		}
+	}
+
+	/* ── Sections container ───────────────────── */
+	&__content {
+		min-width: 0; /* Prevent grid blowout from <pre> elements. */
+	}
+
+	/* ── Roadmap header ───────────────────────── */
+	&__header {
+		margin-bottom: 2rem;
+		padding: 2rem;
+		background: linear-gradient(135deg, var(--gpr-color-primary-light) 0%, var(--gpr-color-accent-light) 100%);
+		border-radius: var(--gpr-radius-lg);
+		border: 1px solid var(--gpr-color-border);
+	}
+
+	&__main-title {
+		font-size: 1.75rem;
+		font-weight: 800;
+		margin: 0 0 0.5rem;
+		color: var(--gpr-color-text);
+		line-height: 1.2;
+	}
+
+	&__subtitle {
+		font-size: 1rem;
+		color: var(--gpr-color-text-muted);
+		margin: 0;
+		line-height: 1.5;
+	}
+
+	/* ── Individual section ───────────────────── */
+
+	/**
+	 * Each roadmap section is a collapsible panel.
+	 *
+	 * HOW collapsing works:
+	 * view.js toggles the --collapsed modifier on the section element.
+	 * The body (__section-body) uses max-height + overflow: hidden
+	 * for a smooth CSS transition.
+	 */
+	&__section {
+		background: var(--gpr-color-surface);
+		border: 1px solid var(--gpr-color-border);
+		border-radius: var(--gpr-radius-lg);
+		margin-bottom: 1.25rem;
+		box-shadow: var(--gpr-shadow-sm);
+		overflow: hidden;
+		transition: box-shadow 0.2s ease;
+
+		&:hover {
+			box-shadow: var(--gpr-shadow-md);
+		}
+
+		/**
+		 * Collapsed modifier — hides the section body.
+		 *
+		 * WHY max-height instead of display:none?
+		 * max-height can be transitioned, giving a smooth
+		 * expand/collapse animation. display:none cannot.
+		 */
+		&--collapsed {
+			.gatherpress-relations__section-body {
+				max-height: 0;
+				padding-top: 0;
+				padding-bottom: 0;
+				opacity: 0;
+			}
+
+			.gatherpress-relations__section-chevron {
+				transform: rotate(-90deg);
+			}
+		}
+	}
+
+	/**
+	 * Section header — clickable toggle for collapse/expand.
+	 *
+	 * WHY a <button>?
+	 * render.php outputs a <button> element so keyboard users can
+	 * toggle sections with Enter/Space. This div styles the inner
+	 * layout of that button.
+	 */
+	&__section-header {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		padding: 1.25rem 1.5rem;
+		cursor: pointer;
+		background: none;
+		border: none;
+		width: 100%;
+		text-align: left;
+		font: inherit;
+		color: inherit;
+		appearance: none;
+		transition: background 0.15s ease;
+
+		&:hover {
+			background: var(--gpr-color-bg);
+		}
+
+		&:focus-visible {
+			outline: 2px solid var(--gpr-color-primary);
+			outline-offset: -2px;
+		}
+	}
+
+	/**
+	 * Section number badge — a small circle with the section index.
+	 */
+	&__section-number {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 32px;
+		height: 32px;
+		border-radius: 50%;
+		background: var(--gpr-color-primary);
+		color: #fff;
+		font-size: 0.8rem;
+		font-weight: 700;
+		flex-shrink: 0;
+	}
+
+	&__section-title {
+		flex: 1;
+		font-size: 1.1rem;
+		font-weight: 700;
+		margin: 0;
+		color: var(--gpr-color-text);
+	}
+
+	&__section-chevron {
+		font-size: 1.2rem;
+		color: var(--gpr-color-text-muted);
+		transition: transform 0.25s ease;
+		flex-shrink: 0;
+		line-height: 1;
+	}
+
+	/**
+	 * Section body — the collapsible content area.
+	 *
+	 * HOW the transition works:
+	 * max-height transitions from a large value (5000px, enough for
+	 * any section) to 0 when --collapsed is applied. The actual
+	 * content height is always less than 5000px, so the transition
+	 * duration scales naturally.
+	 */
+	&__section-body {
+		padding: 0 1.5rem 1.5rem;
+		max-height: 9000px;
+		opacity: 1;
+		overflow: hidden;
+		transition: max-height 0.4s ease, opacity 0.3s ease, padding 0.3s ease;
+	}
+
+	/* ── Content typography ───────────────────── */
+
+	&__heading {
+		font-size: 1rem;
+		font-weight: 700;
+		margin: 1.5rem 0 0.75rem;
+		color: var(--gpr-color-text);
+
+		&:first-child {
+			margin-top: 0;
+		}
+	}
+
+	&__paragraph {
+		margin: 0 0 1rem;
+		color: var(--gpr-color-text);
+		line-height: 1.7;
+	}
+
+	&__strong {
+		font-weight: 700;
+		color: var(--gpr-color-text);
+	}
+
+	&__em {
+		font-style: italic;
+	}
+
+	/* ── Code blocks ──────────────────────────── */
+
+	/**
+	 * Code block wrapper — dark background for contrast.
+	 *
+	 * WHY a dark theme?
+	 * Code blocks use a dark background to visually separate
+	 * them from prose, matching the convention in documentation
+	 * sites (MDN, WordPress Developer Resources, etc.).
+	 */
+	&__code-block {
+		background: var(--gpr-color-code-bg);
+		border-radius: var(--gpr-radius-md);
+		padding: 1.25rem 1.5rem;
+		margin: 1rem 0;
+		overflow-x: auto;
+		border: 1px solid rgba(255, 255, 255, 0.08);
+	}
+
+	&__code {
+		font-family: var(--gpr-font-mono);
+		font-size: 0.82rem;
+		color: var(--gpr-color-code-text);
+		line-height: 1.6;
+		white-space: pre;
+		display: block;
+	}
+
+	/**
+	 * Inline code — used for short references like function names,
+	 * hook names, or attribute keys within prose.
+	 */
+	&__inline-code {
+		font-family: var(--gpr-font-mono);
+		font-size: 0.85em;
+		background: var(--gpr-color-bg);
+		padding: 0.15em 0.4em;
+		border-radius: 4px;
+		border: 1px solid var(--gpr-color-border);
+		color: var(--gpr-color-accent);
+	}
+
+	/* ── Info / tip / warning cards ───────────── */
+
+	/**
+	 * Callout card — used for tips, warnings, and important notes.
+	 *
+	 * Modifiers set the left-border colour and background:
+	 * --tip:     green (success)
+	 * --warning: amber (warning)
+	 * --info:    blue  (primary)
+	 * --key:     purple (accent)
+	 */
+	&__callout {
+		padding: 1rem 1.25rem;
+		border-radius: var(--gpr-radius-md);
+		margin: 1rem 0;
+		border-left: 4px solid var(--gpr-color-primary);
+		background: var(--gpr-color-primary-light);
+
+		&--tip {
+			border-left-color: var(--gpr-color-success);
+			background: var(--gpr-color-success-light);
+		}
+
+		&--warning {
+			border-left-color: var(--gpr-color-warning);
+			background: var(--gpr-color-warning-light);
+		}
+
+		&--info {
+			border-left-color: var(--gpr-color-primary);
+			background: var(--gpr-color-primary-light);
+		}
+
+		&--key {
+			border-left-color: var(--gpr-color-accent);
+			background: var(--gpr-color-accent-light);
+		}
+	}
+
+	&__callout-title {
+		font-weight: 700;
+		font-size: 0.85rem;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		margin: 0 0 0.35rem;
+	}
+
+	&__callout-text {
+		margin: 0;
+		font-size: 0.92rem;
+		line-height: 1.6;
+	}
+
+	/* ── Diagram / visual cards ───────────────── */
+
+	/**
+	 * Diagram container — holds ASCII art or visual relationship
+	 * representations.
+	 *
+	 * WHY monospace?
+	 * ASCII diagrams require fixed-width characters to maintain
+	 * alignment. The dark background and code font distinguish
+	 * diagrams from prose.
+	 */
+	&__diagram {
+		background: var(--gpr-color-code-bg);
+		border-radius: var(--gpr-radius-md);
+		padding: 1.5rem;
+		margin: 1rem 0;
+		overflow-x: auto;
+		border: 1px solid rgba(255, 255, 255, 0.08);
+	}
+
+	&__diagram-content {
+		font-family: var(--gpr-font-mono);
+		font-size: 0.8rem;
+		color: var(--gpr-color-code-text);
+		line-height: 1.5;
+		white-space: pre;
+		display: block;
+	}
+
+	&__diagram-caption {
+		display: block;
+		margin-top: 0.75rem;
+		font-size: 0.78rem;
+		color: var(--gpr-color-text-muted);
+		text-align: center;
+		font-style: italic;
+		font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+	}
+
+	/* ── Comparison table ─────────────────────── */
+
+	/**
+	 * Table for comparing approaches (CPT vs Taxonomy vs Users).
+	 */
+	&__table-wrap {
+		overflow-x: auto;
+		margin: 1rem 0;
+		border-radius: var(--gpr-radius-md);
+		border: 1px solid var(--gpr-color-border);
+	}
+
+	&__table {
+		width: 100%;
+		border-collapse: collapse;
+		font-size: 0.88rem;
+
+		th,
+		td {
+			padding: 0.7rem 1rem;
+			text-align: left;
+			border-bottom: 1px solid var(--gpr-color-border);
+		}
+
+		th {
+			background: var(--gpr-color-bg);
+			font-weight: 700;
+			font-size: 0.8rem;
+			text-transform: uppercase;
+			letter-spacing: 0.04em;
+			color: var(--gpr-color-text-muted);
+		}
+
+		tr:last-child td {
+			border-bottom: none;
+		}
+
+		tr:hover td {
+			background: var(--gpr-color-primary-light);
+		}
+	}
+
+	/* ── Unordered & ordered lists ────────────── */
+	&__list {
+		margin: 0.75rem 0;
+		padding-left: 1.5rem;
+
+		li {
+			margin-bottom: 0.4rem;
+			line-height: 1.6;
+		}
+	}
+
+	/* ── Phase / milestone cards ──────────────── */
+
+	/**
+	 * Phase card — used in the Implementation Roadmap section
+	 * to show milestones with colour-coded priority indicators.
+	 */
+	&__phase {
+		background: var(--gpr-color-bg);
+		border: 1px solid var(--gpr-color-border);
+		border-radius: var(--gpr-radius-md);
+		padding: 1.25rem;
+		margin: 0.75rem 0;
+
+		&--alpha {
+			border-left: 4px solid var(--gpr-color-success);
+		}
+
+		&--beta {
+			border-left: 4px solid var(--gpr-color-primary);
+		}
+
+		&--ga {
+			border-left: 4px solid var(--gpr-color-accent);
+		}
+
+		&--future {
+			border-left: 4px solid var(--gpr-color-warning);
+		}
+	}
+
+	&__phase-title {
+		font-weight: 700;
+		font-size: 0.95rem;
+		margin: 0 0 0.5rem;
+	}
+
+	&__phase-text {
+		margin: 0;
+		font-size: 0.9rem;
+		color: var(--gpr-color-text-muted);
+		line-height: 1.6;
+	}
+}

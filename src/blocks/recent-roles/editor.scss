@@ -1,0 +1,30 @@
+/**
+ * Editor-only styles for the Person Recent Roles block.
+ *
+ * Minimal overrides — the shared style.scss handles most of the
+ * visual presentation. These styles only adjust editor-specific
+ * rendering concerns.
+ *
+ * @package GatherPressRelations
+ */
+
+.wp-block-gatherpress-person-recent-roles {
+	/**
+	 * In the editor, the consumer title renders as an <a> to match
+	 * the frontend markup. Prevent actual navigation via onClick
+	 * handler in the component — the default cursor signals it's
+	 * not clickable in the editor context.
+	 */
+	.recent-roles__consumer-link {
+		cursor: default;
+		pointer-events: none;
+	}
+
+	/**
+	 * Loading state vertical centering.
+	 */
+	.recent-roles__loading {
+		justify-content: center;
+		min-height: 80px;
+	}
+}

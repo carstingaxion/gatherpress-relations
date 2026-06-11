@@ -1,0 +1,54 @@
+{
+    "name": "carstingaxion/gatherpress-relations",
+    "description": "Connects persons to events (or any post type) with individual roles per relation.",
+    "license": "GPL-2.0+",
+    "type": "wordpress-plugin",
+    "keywords": [
+        "wordpress",
+        "wordpress-plugin"
+    ],
+    "authors": [
+        {
+            "name": "figuren.theater",
+            "email": "info@figuren.theater"
+        },
+        {
+            "name": "Carsten Bach",
+            "email": "mail@carsten-bach.de",
+            "homepage": "https://carsten-bach.de",
+            "role": "Developer"
+        }
+    ],
+    "homepage": "https://github.com/carstingaxion/gatherpress-relations",
+    "support": {
+        "email": "info@figuren.theater",
+        "issues": "https://github.com/carstingaxion/gatherpress-relations/issues",
+        "source": "https://github.com/carstingaxion/gatherpress-relations"
+    },
+    "require-dev": {
+        "figuren-theater/code-quality": "*"
+    },
+    "repositories": [
+        {
+            "type": "composer",
+            "url": "https://wpackagist.org"
+        }
+    ],
+    "config": {
+        "allow-plugins": {
+            "composer/installers": true,
+            "dealerdirect/phpcodesniffer-composer-installer": true,
+            "ergebnis/composer-normalize": true,
+            "figuren-theater/altis-core": true,
+            "figuren-theater/ft-core": true,
+            "koodimonni/composer-dropin-installer": true,
+            "phpstan/extension-installer": true
+        },
+        "sort-packages": true
+    },
+    "extra": {
+        "altis": {
+            "install-overrides": []
+        }
+    }
+}

@@ -1,0 +1,152 @@
+/**
+ * Editor-only styles for the GatherPress Relations Roadmap block.
+ *
+ * HOW these are scoped:
+ * ─────────────────────
+ * block.json declares `editorStyle: "file:./index.css"` which maps
+ * to the compiled output of this file. WordPress enqueues it only
+ * in the editor context, so none of these rules reach the frontend.
+ *
+ * WHY a separate file?
+ * The editor shows a compact placeholder (see edit.js), not the full
+ * roadmap. These styles exclusively support that placeholder card.
+ * Mixing them into style.scss would create dead CSS on the frontend.
+ *
+ * @package GatherPressRelations
+ */
+
+.wp-block-gatherpress-relations-roadmap {
+	/**
+	 * Placeholder card wrapper.
+	 *
+	 * WHY a border + gradient background?
+	 * The gradient communicates "this is a special informational block"
+	 * and visually differentiates it from plain paragraph blocks in the
+	 * editor canvas.
+	 */
+	.gatherpress-relations__editor-placeholder {
+		background: linear-gradient(135deg, #eff6ff 0%, #f5f3ff 100%);
+		border: 1px solid #e2e8f0;
+		border-radius: 12px;
+		padding: 1.75rem;
+		min-height: 140px;
+	}
+
+	/**
+	 * Header row — icon + title side by side.
+	 */
+	.gatherpress-relations__editor-placeholder-header {
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		margin-bottom: 0.75rem;
+
+		/**
+		 * Override the default Dashicon colour to match the primary blue.
+		 */
+		.dashicon,
+		svg {
+			fill: #3b82f6;
+			color: #3b82f6;
+		}
+	}
+
+	/**
+	 * Placeholder title — visually prominent but smaller than an <h2>.
+	 */
+	.gatherpress-relations__editor-placeholder-title {
+		margin: 0;
+		font-size: 1.15rem;
+		font-weight: 700;
+		color: #1e293b;
+	}
+
+	/**
+	 * Short description of what the block does on the frontend.
+	 */
+	.gatherpress-relations__editor-placeholder-description {
+		font-size: 0.88rem;
+		color: #64748b;
+		line-height: 1.55;
+		margin: 0 0 1rem;
+	}
+
+	/**
+	 * Section checklist — a visual list of toggleable sections.
+	 */
+	.gatherpress-relations__editor-placeholder-sections {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 0.35rem 1rem;
+
+		@media (max-width: 600px) {
+			grid-template-columns: 1fr;
+		}
+	}
+
+	/**
+	 * Individual section item in the checklist.
+	 * Uses a flex layout for icon + label alignment.
+	 */
+	.gatherpress-relations__editor-placeholder-section {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+		font-size: 0.82rem;
+		padding: 0.3rem 0.5rem;
+		border-radius: 6px;
+		transition: opacity 0.15s ease;
+
+		.dashicon,
+		svg {
+			width: 16px;
+			height: 16px;
+		}
+
+		/**
+		 * Enabled modifier — full opacity + primary icon colour.
+		 */
+		&--enabled {
+			color: #1e293b;
+
+			.dashicon,
+			svg {
+				fill: #3b82f6;
+				color: #3b82f6;
+			}
+		}
+
+		/**
+		 * Disabled modifier — reduced opacity signals the section
+		 * is toggled off and won't render on the frontend.
+		 */
+		&--disabled {
+			opacity: 0.4;
+			color: #94a3b8;
+
+			.dashicon,
+			svg {
+				fill: #94a3b8;
+				color: #94a3b8;
+			}
+		}
+	}
+
+	/**
+	 * Status bar — "X of 6 sections enabled".
+	 * Positioned at the bottom of the placeholder card as a subtle
+	 * summary line.
+	 */
+	.gatherpress-relations__editor-placeholder-status {
+		margin-top: 1rem;
+		padding-top: 0.75rem;
+		border-top: 1px solid #e2e8f0;
+		font-size: 0.78rem;
+		font-weight: 600;
+		color: #64748b;
+		text-align: right;
+	}
+}

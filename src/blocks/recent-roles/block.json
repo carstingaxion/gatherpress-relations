@@ -1,0 +1,61 @@
+{
+	"$schema": "https://schemas.wp.org/trunk/block.json",
+	"apiVersion": 3,
+	"name": "gatherpress/person-recent-roles",
+	"version": "0.1.0",
+	"title": "Person Recent Roles",
+	"category": "widgets",
+	"icon": "id-alt",
+	"description": "Displays a list of recent roles a person has held across productions and events, with each role linking to its consumer post page. Reads junction metadata from _gatherpress_relations on consumer posts tagged with the current person's shadow term.",
+	"attributes": {
+		"maxRoles": {
+			"type": "number",
+			"default": 10
+		},
+		"showDepartment": {
+			"type": "boolean",
+			"default": true
+		},
+		"groupByDepartment": {
+			"type": "boolean",
+			"default": false
+		},
+		"showPostType": {
+			"type": "boolean",
+			"default": false
+		},
+		"showDate": {
+			"type": "boolean",
+			"default": true
+		},
+		"dateFormat": {
+			"type": "string",
+			"default": "Y"
+		},
+		"filterPostType": {
+			"type": "string",
+			"default": ""
+		}
+	},
+	"usesContext": [ "postId", "postType" ],
+	"supports": {
+		"html": false,
+		"align": [ "wide", "full" ],
+		"spacing": {
+			"margin": true,
+			"padding": true
+		},
+		"color": {
+			"background": true,
+			"text": true
+		},
+		"typography": {
+			"fontSize": true
+		}
+	},
+	"textdomain": "gatherpress-relations",
+	"editorScript": "file:./index.js",
+	"editorStyle": "file:./index.css",
+	"style": "file:./style-index.css",
+	"render": "file:./render.php"
+}

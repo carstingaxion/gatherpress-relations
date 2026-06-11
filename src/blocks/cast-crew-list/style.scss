@@ -1,0 +1,664 @@
+/**
+ * Shared styles for the Cast & Crew List block.
+ *
+ * Applied in both editor and frontend contexts via block.json's
+ * `style` asset. Uses BEM naming with `cast-crew` as the block name.
+ *
+ * HOW the grid works:
+ * The `--cast-crew-columns` custom property (set via block attributes)
+ * controls the grid column count. This lets the editor's RangeControl
+ * dynamically adjust the layout without extra CSS classes.
+ *
+ * @package GatherPressRelations
+ */
+
+.wp-block-gatherpress-cast-crew-list {
+	max-width: 100%;
+	line-height: 1.5;
+	container-type: inline-size;
+	container-name: cast-crew-block;
+
+	/**
+	 * Color inheritance overrides.
+	 *
+	 * WHY minimal overrides now?
+	 * The base styles already use `inherit`, `currentColor`, and
+	 * `transparent` for most properties, so colors cascade naturally
+	 * from ANY ancestor (not just when applied directly to this block).
+	 * These overrides handle the few remaining cases where a direct
+	 * `has-text-color` or `has-background` class on this block
+	 * requires slightly different treatment (e.g., card borders).
+	 */
+	&.has-text-color {
+		.cast-crew__card:focus-visible {
+			outline-color: currentColor;
+		}
+	}
+}
+
+.cast-crew {
+	/**
+	 * Department section — contains heading + grid.
+	 */
+	&__department {
+		margin-bottom: 2rem;
+
+		&:last-child {
+			margin-bottom: 0;
+		}
+	}
+
+	/**
+	 * Department heading — rendered as a standard WP core heading
+	 * block (.wp-block-heading) with no custom styling. The heading
+	 * level is controlled by the `departmentHeadingLevel` attribute.
+	 */
+
+	/**
+	 * Responsive grid of person cards.
+	 *
+	 * WHY repeat(var(--cast-crew-columns), 1fr)?
+	 * The custom property is set by the block's `columns` attribute
+	 * in both editor (via inline style) and frontend (via render.php
+	 * wrapper attributes). This avoids generating per-column CSS classes.
+	 */
+	&__grid {
+		display: grid;
+		grid-template-columns: repeat(var(--cast-crew-columns, 3), 1fr);
+		gap: 1.25rem;
+
+		@container cast-crew-block (max-width: 500px) {
+			grid-template-columns: repeat(2, 1fr);
+		}
+
+		@container cast-crew-block (max-width: 300px) {
+			grid-template-columns: 1fr;
+		}
+	}
+
+	/**
+	 * Person card — the individual roster entry.
+	 *
+	 * WHY flex column?
+	 * Stacks the headshot, name, and role vertically, centered.
+	 * The card is either an <a> (if linking is enabled) or a <div>.
+	 */
+	&__card {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		text-align: center;
+		padding: 1.25rem 1rem;
+		background: transparent;
+		border: 1px solid rgba(128, 128, 128, 0.15);
+		border-radius: var(--gpr-radius-md, 10px);
+		text-decoration: none;
+		color: inherit;
+
+		/**
+		 * When the card has no headshot child, the name becomes the
+		 * first visual element — reduce top padding slightly for a
+		 * tighter text-only card.
+		 */
+		&:not(:has(.cast-crew__headshot)):not(:has(.cast-crew__headshot-placeholder)) {
+			padding: 1rem;
+		}
+
+		/**
+		 * WHY scope hover to <a> only?
+		 * When linkToPersonPage is disabled, the card renders as a
+		 * <div>. Hover effects (shadow + lift) imply interactivity
+		 * and mislead users into thinking the card is clickable.
+		 * Restricting hover transforms to the anchor variant keeps
+		 * the UX honest.
+		 */
+		&:where(a) {
+			transition: box-shadow 0.2s ease, transform 0.2s ease;
+			cursor: pointer;
+
+			&:hover {
+				box-shadow: 0 4px 12px rgb(0 0 0 / 0.08);
+				transform: translateY(-2px);
+			}
+
+			&:focus-visible {
+				outline: 2px solid var(--gpr-color-primary, #3b82f6);
+				outline-offset: 2px;
+			}
+		}
+	}
+
+	/**
+	 * Headshot image — circular crop.
+	 *
+	 * WHY object-fit: cover?
+	 * Featured images may have varying aspect ratios. Cover ensures
+	 * the circle is always filled without distortion.
+	 *
+	 * WHY currentColor for border?
+	 * When a parent sets a text color, the border inherits it at
+	 * reduced opacity, keeping the headshot visually integrated
+	 * with any color scheme.
+	 */
+	&__headshot {
+		width: 80px;
+		height: 80px;
+		border-radius: 50%;
+		object-fit: cover;
+		margin-bottom: 0.75rem;
+		border: 2px solid rgba(128, 128, 128, 0.2);
+	}
+
+	/**
+	 * Preview modifier — adds a subtle visual indicator that the
+	 * block is showing placeholder data (inside a Query Loop).
+	 */
+	&--preview {
+		opacity: 0.7;
+		position: relative;
+
+		&::after {
+			content: "";
+			position: absolute;
+			inset: 0;
+			border: 2px dashed var(--gpr-color-border, #e2e8f0);
+			border-radius: var(--gpr-radius-md, 10px);
+			pointer-events: none;
+		}
+	}
+
+	/**
+	 * Headshot placeholder — shown when no featured image exists.
+	 *
+	 * WHY a placeholder instead of nothing?
+	 * Consistent card heights in the grid. A missing headshot would
+	 * make the card shorter and break the visual rhythm.
+	 *
+	 * WHY inherit + opacity?
+	 * Using currentColor for the icon and an opacity-based approach
+	 * ensures the placeholder adapts to any inherited text color
+	 * from ancestor containers.
+	 */
+	&__headshot-placeholder {
+		width: 80px;
+		height: 80px;
+		border-radius: 50%;
+		background: rgba(128, 128, 128, 0.08);
+		border: 2px solid currentColor;
+		opacity: 0.3;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		margin-bottom: 0.75rem;
+		color: inherit;
+	}
+
+	/**
+	 * Person name — the primary text.
+	 *
+	 * WHY `inherit` first?
+	 * When a parent container (Group, Cover, etc.) sets a text color,
+	 * the `color` property cascades via inheritance. Using `inherit`
+	 * ensures the name picks up that color even when the
+	 * `has-text-color` class is on an ancestor, not on this block
+	 * directly. The custom property is the fallback for un-coloured
+	 * contexts.
+	 */
+	&__name {
+		font-size: 0.95rem;
+		font-weight: 600;
+		color: inherit;
+		margin-bottom: 0.25rem;
+		line-height: 1.3;
+	}
+
+	/**
+	 * Role label — secondary text below the name.
+	 *
+	 * WHY italic?
+	 * Matches the theatrical convention where role names are
+	 * italicised in cast lists and playbills.
+	 *
+	 * WHY inherit with opacity?
+	 * Inheriting the text color and reducing opacity creates a
+	 * natural visual hierarchy that works on any background,
+	 * whether the color is set directly or inherited from an ancestor.
+	 */
+	&__role {
+		font-size: 0.82rem;
+		font-style: italic;
+		color: inherit;
+		opacity: 0.65;
+		line-height: 1.4;
+	}
+}
+
+/* ──────────────────────────────────────────────
+ * Block Style: Simple List (default)
+ * ──────────────────────────────────────────────
+ *
+ * A minimal vertical list with no grid, no card borders, and no
+ * headshot circles. Names and roles are displayed inline in a
+ * compact, scannable format — similar to a theatre programme's
+ * cast page where each line reads "Name ··· Role".
+ *
+ * HOW this overrides the base styles:
+ * The `is-style-simple-list` class is added to the block wrapper
+ * by WordPress when this style variation is active. All overrides
+ * are scoped under this class to avoid affecting the default grid
+ * layout or the compact-table style.
+ */
+.wp-block-gatherpress-cast-crew-list.is-style-simple-list {
+	.cast-crew__grid {
+		display: flex;
+		flex-direction: column;
+		gap: 0;
+	}
+
+	.cast-crew__card {
+		flex-direction: row;
+		align-items: center;
+		text-align: left;
+		padding: 0.45rem 0;
+		background: transparent;
+		border: none;
+		border-bottom: 1px solid rgba(128, 128, 128, 0.15);
+		border-radius: 0;
+		gap: 0.5rem;
+
+		&:where(a):hover {
+			box-shadow: none;
+			transform: none;
+			background: rgba(128, 128, 128, 0.08);
+		}
+
+		&:last-child {
+			border-bottom: none;
+		}
+
+		/**
+		 * When headshots are disabled, reduce padding since
+		 * there's no circular avatar to align with.
+		 */
+		&:not(:has(.cast-crew__headshot)):not(:has(.cast-crew__headshot-placeholder)) {
+			padding: 0.45rem 0;
+		}
+	}
+
+	/**
+	 * In simple-list mode headshots render as small inline circles
+	 * when the user explicitly enables them.
+	 */
+	.cast-crew__headshot {
+		width: 28px;
+		height: 28px;
+		margin-bottom: 0;
+		flex-shrink: 0;
+	}
+
+	.cast-crew__headshot-placeholder {
+		width: 28px;
+		height: 28px;
+		margin-bottom: 0;
+		flex-shrink: 0;
+
+		svg {
+			width: 16px;
+			height: 16px;
+		}
+	}
+
+	.cast-crew__name {
+		font-size: 0.92rem;
+		font-weight: 600;
+		margin-bottom: 0;
+		flex-shrink: 0;
+	}
+
+	/**
+	 * The role follows the name on the same line, separated by an
+	 * em dash rendered via CSS ::before pseudo-element.
+	 */
+	.cast-crew__role {
+		font-size: 0.88rem;
+		line-height: 1.4;
+
+		&::before {
+			content: "— ";
+			font-style: normal;
+		}
+	}
+
+	.cast-crew__department {
+		margin-bottom: 1.5rem;
+	}
+
+
+}
+
+/* ──────────────────────────────────────────────
+ * Block Style: Compact Table
+ * ──────────────────────────────────────────────
+ *
+ * A dense tabular layout that renders each department as a section
+ * with rows of name/role pairs in a two-column table-like format.
+ * Optimised for printed programmes, playbills, and contexts where
+ * screen real-estate is limited.
+ *
+ * HOW this differs from the default:
+ * - No card containers, no shadows, no hover transforms.
+ * - Grid replaced with a CSS table-like layout (display: grid with
+ *   two fixed columns: name | role).
+ * - Headshots are suppressed entirely — the table style is
+ *   text-only by design.
+ * - Department headings use a coloured left border instead of an
+ *   underline, giving a distinct visual language.
+ * - Alternating row backgrounds for readability.
+ */
+/**
+ * Simple-list WP-core-color border opacity override.
+ *
+ * WHY a separate rule?
+ * The border-bottom on .cast-crew__card uses currentColor when
+ * has-text-color is set, but at full opacity the border is too
+ * heavy. We reduce it with a filter or rgba. Since we cannot
+ * use rgba(currentColor, 0.2) in CSS, we use a pseudo-element
+ * approach — but the simplest path is to set a lower opacity
+ * on the border directly via the parent rule above.
+ */
+
+.wp-block-gatherpress-cast-crew-list.is-style-compact-table {
+	/**
+	 * Compact-table headshots render as small inline avatars.
+	 *
+	 * WHY not hidden?
+	 * A small avatar adds a recognisable visual anchor to each row
+	 * without consuming significant horizontal space. At 24 px the
+	 * image is large enough to identify a face yet small enough for
+	 * the dense table layout.
+	 *
+	 * WHY override via CSS instead of a separate render path?
+	 * The render.php output is shared across all styles. Resizing
+	 * via CSS keeps the server-side markup style-agnostic — a user
+	 * can switch styles without re-saving the post.
+	 */
+	.cast-crew__headshot {
+		width: 24px;
+		height: 24px;
+		border-radius: 50%;
+		object-fit: cover;
+		margin-bottom: 0;
+		border-width: 1px;
+		flex-shrink: 0;
+	}
+
+	.cast-crew__headshot-placeholder {
+		width: 24px;
+		height: 24px;
+		border-radius: 50%;
+		margin-bottom: 0;
+		border-width: 1px;
+		flex-shrink: 0;
+
+		svg {
+			width: 14px;
+			height: 14px;
+		}
+	}
+
+	.cast-crew__department {
+		margin-bottom: 1.5rem;
+		background: transparent;
+		border: 1px solid rgba(128, 128, 128, 0.2);
+		border-radius: var(--gpr-radius-sm, 6px);
+		overflow: hidden;
+
+		&:last-child {
+			margin-bottom: 0;
+		}
+	}
+
+	.wp-block-heading {
+		margin: 0;
+		padding: 0.6rem 1rem;
+		border-bottom: 1px solid rgba(128, 128, 128, 0.15);
+		background: rgba(128, 128, 128, 0.06);
+		font-size: 0.78rem;
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+		color: inherit;
+	}
+
+	.cast-crew__grid {
+		display: flex;
+		flex-direction: column;
+		gap: 0;
+	}
+
+	.cast-crew__card {
+		display: grid;
+		grid-template-columns: auto 1fr 1fr;
+		align-items: center;
+		text-align: left;
+		padding: 0.4rem 1rem;
+		background: transparent;
+		border: none;
+		border-bottom: 1px solid rgba(128, 128, 128, 0.15);
+		border-radius: 0;
+		text-decoration: none;
+		color: inherit;
+		gap: 0.6rem;
+
+		&:last-child {
+			border-bottom: none;
+		}
+
+		&:where(a):hover {
+			box-shadow: none;
+			transform: none;
+			background: rgba(128, 128, 128, 0.08);
+		}
+
+		/**
+		 * When headshots are disabled, the avatar column disappears
+		 * from the DOM. Switch to a two-column layout so name and
+		 * role fill the available space without an empty first column.
+		 */
+		&:not(:has(.cast-crew__headshot)):not(:has(.cast-crew__headshot-placeholder)) {
+			grid-template-columns: 1fr 1fr;
+		}
+
+		/**
+		 * Alternating row backgrounds for table readability.
+		 *
+		 * WHY nth-child on the card?
+		 * The cards are direct children of .cast-crew__grid, so
+		 * nth-child(even) hits every other row in sequence,
+		 * producing a zebra-stripe effect.
+		 *
+		 * WHY rgba instead of custom properties?
+		 * Semi-transparent grey adapts to any background color
+		 * from ancestor containers without needing overrides.
+		 */
+		&:nth-child(even) {
+			background: rgba(128, 128, 128, 0.05);
+
+			&:where(a):hover {
+				background: rgba(128, 128, 128, 0.1);
+			}
+		}
+
+		@container cast-crew-block (max-width: 300px) {
+			grid-template-columns: auto 1fr;
+			gap: 0.4rem;
+
+			&:not(:has(.cast-crew__headshot)):not(:has(.cast-crew__headshot-placeholder)) {
+				grid-template-columns: 1fr;
+			}
+
+			.cast-crew__role {
+				grid-column: -1;
+				text-align: left;
+			}
+		}
+	}
+
+	.cast-crew__name {
+		font-size: 0.88rem;
+		font-weight: 600;
+		margin-bottom: 0;
+	}
+
+	.cast-crew__role {
+		font-size: 0.85rem;
+		font-style: italic;
+		text-align: right;
+
+		@media (max-width: 480px) {
+			text-align: left;
+		}
+	}
+}
+
+
+/* ──────────────────────────────────────────────
+ * Block Style: Cards
+ * ──────────────────────────────────────────────
+ *
+ * A visual card grid layout with centered headshots, names, and
+ * roles inside distinct card containers with subtle shadows and
+ * hover elevation. This is the "classic" cast & crew look — each
+ * person gets a prominent, standalone card.
+ *
+ * HOW this uses the columns attribute:
+ * The `--cast-crew-columns` custom property (set by the block's
+ * `columns` attribute via inline styles on the wrapper) drives the
+ * grid-template-columns value. The grid is fully responsive,
+ * collapsing to 2 columns at 768px and 1 column at 480px.
+ *
+ * HOW this differs from the default (simple-list):
+ * - Cards have visible borders, background, border-radius, and
+ *   box-shadow — each person is a distinct visual unit.
+ * - Layout is a true CSS Grid (not a vertical flex list).
+ * - Headshots are prominent circles (96px) with a subtle border.
+ * - Hover on linked cards lifts the card with a shadow.
+ * - Department headings get a decorative bottom border.
+ */
+.wp-block-gatherpress-cast-crew-list.is-style-cards {
+	.cast-crew__grid {
+		display: grid;
+		grid-template-columns: repeat(var(--cast-crew-columns, 3), 1fr);
+		gap: 1.5rem;
+
+		@container cast-crew-block (max-width: 500px) {
+			grid-template-columns: repeat(2, 1fr);
+		}
+
+		@container cast-crew-block (max-width: 300px) {
+			grid-template-columns: 1fr;
+		}
+	}
+
+	.cast-crew__department {
+		margin-bottom: 2.5rem;
+
+		&:last-child {
+			margin-bottom: 0;
+		}
+	}
+
+	/**
+	 * Department headings get a subtle bottom accent line in the
+	 * cards style to visually separate sections in the grid layout.
+	 */
+	.wp-block-heading {
+		padding-bottom: 0.5rem;
+		margin-bottom: 1.25rem;
+		opacity: 0.8;
+	}
+
+	.cast-crew__card {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		text-align: center;
+		padding: 1.5rem 1.25rem;
+		background: rgba(255, 255, 255, 0.08);
+		border: 1px solid rgba(128, 128, 128, 0.15);
+		border-radius: var(--gpr-radius-lg, 16px);
+		box-shadow: 0 1px 3px rgb(0 0 0 / 0.08);
+		text-decoration: none;
+		color: inherit;
+		gap: 0.25rem;
+
+		/**
+		 * Linked cards get interactive hover — lift + deeper shadow.
+		 */
+		&:where(a) {
+			transition: box-shadow 0.25s ease, transform 0.25s ease;
+			cursor: pointer;
+
+			&:hover {
+				box-shadow: var(--gpr-shadow-md, 0 4px 12px rgb(0 0 0 / 0.1));
+				transform: translateY(-3px);
+			}
+
+			&:focus-visible {
+				outline: 2px solid var(--gpr-color-primary, #3b82f6);
+				outline-offset: 2px;
+			}
+		}
+
+		/**
+		 * When headshots are disabled, tighten padding since there
+		 * is no large circle to balance.
+		 */
+		&:not(:has(.cast-crew__headshot)):not(:has(.cast-crew__headshot-placeholder)) {
+			padding: 1.25rem 1rem;
+		}
+	}
+
+	/**
+	 * Prominent headshot — larger circle for the card layout.
+	 */
+	.cast-crew__headshot {
+		width: 96px;
+		height: 96px;
+		border-radius: 50%;
+		object-fit: cover;
+		margin-bottom: 0.75rem;
+		border: 3px solid rgba(128, 128, 128, 0.2);
+	}
+
+	.cast-crew__headshot-placeholder {
+		width: 96px;
+		height: 96px;
+		border-radius: 50%;
+		background: rgba(128, 128, 128, 0.08);
+		border: 3px solid currentColor;
+		opacity: 0.3;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		margin-bottom: 0.75rem;
+		color: inherit;
+	}
+
+	.cast-crew__name {
+		font-size: 1rem;
+		font-weight: 700;
+		color: inherit;
+		margin-bottom: 0.15rem;
+		line-height: 1.3;
+	}
+
+	.cast-crew__role {
+		font-size: 0.88rem;
+		font-style: italic;
+		color: inherit;
+		opacity: 0.65;
+		line-height: 1.4;
+	}
+
+
+}

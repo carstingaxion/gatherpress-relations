@@ -1,0 +1,3504 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<artefact xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="artefact.xsd" name="Theater Relations Roadmap" slug="telex-theater-relations" type="code-package" schemaVersion="2">
+  <file path="src/block.json">
+    <description>Block metadata. Declares the block name, attributes for toggling roadmap sections, and asset paths. The block is dynamic (uses render.php) so no save markup is stored in post_content — only the attribute state.</description>
+    <content><![CDATA[{
+	"$schema": "https://schemas.wp.org/trunk/block.json",
+	"apiVersion": 3,
+	"name": "gatherpress/relations-roadmap",
+	"version": "0.1.0",
+	"title": "GatherPress Relations Roadmap",
+	"category": "widgets",
+	"icon": "networking",
+	"description": "A comprehensive architectural roadmap for connecting persons to productions (or any special post type) with roles in WordPress — powered by GatherPress shadow taxonomies, covering data modeling, block design, and scaling strategies.",
+	"example": {
+		"attributes": {
+			"showDataModeling": true,
+			"showCastCrew": true,
+			"showEnsemble": true,
+			"showVisualizations": true,
+			"showScaling": true,
+			"showImplementation": true
+		}
+	},
+	"attributes": {
+		"showDataModeling": {
+			"type": "boolean",
+			"default": true
+		},
+		"showCastCrew": {
+			"type": "boolean",
+			"default": true
+		},
+		"showEnsemble": {
+			"type": "boolean",
+			"default": true
+		},
+		"showVisualizations": {
+			"type": "boolean",
+			"default": true
+		},
+		"showScaling": {
+			"type": "boolean",
+			"default": true
+		},
+		"showImplementation": {
+			"type": "boolean",
+			"default": true
+		}
+	},
+	"supports": {
+		"html": false,
+		"align": [ "wide", "full" ],
+		"spacing": {
+			"margin": true,
+			"padding": true
+		},
+		"color": {
+			"background": true,
+			"text": true
+		},
+		"typography": {
+			"fontSize": true
+		}
+	},
+	"textdomain": "gatherpress-relations",
+	"editorScript": "file:./index.js",
+	"editorStyle": "file:./index.css",
+	"style": "file:./style-index.css",
+	"viewScript": "file:./view.js",
+	"render": "file:./render.php"
+}]]></content>
+  </file>
+  <file path="src/index.js">
+    <description>Block registration entry point. Imports the Edit component and metadata from block.json. Because this is a dynamic block (server-rendered via render.php), no save function is needed — we return null so WordPress stores only the block delimiter comment and serialized attributes in post_content.</description>
+    <content><![CDATA[/**
+ * Block registration for GatherPress Relations Roadmap.
+ *
+ * HOW this works:
+ * ───────────────
+ * `registerBlockType` reads the block name from `metadata.name`
+ * (which comes from block.json: "gatherpress/relations-roadmap")
+ * and associates the `edit` component for the editor UI.
+ *
+ * WHY no `save` export?
+ * This is a dynamic block — the frontend markup is produced entirely
+ * by `render.php` on each page load. Returning `null` from `save`
+ * tells WordPress to store only the block comment delimiter and
+ * serialised attributes in `post_content`, e.g.:
+ *
+ * ```html
+ * <!-- wp:gatherpress/relations-roadmap {"showDataModeling":true} /-->
+ * ```
+ *
+ * @see https://developer.wordpress.org/block-editor/reference-guides/block-api/block-registration/
+ *
+ * @package GatherPressRelations
+ */
+import { registerBlockType } from '@wordpress/blocks';
+
+/**
+ * Shared styles applied in both editor and frontend contexts.
+ *
+ * WHY imported here?
+ * Webpack bundles any SCSS imported from the entry point into
+ * `style-index.css`, which block.json references as the `style` asset.
+ * This ensures the same visual baseline in both environments.
+ */
+import './style.scss';
+
+/**
+ * Internal dependencies — the editor-only component.
+ */
+import Edit from './edit';
+import metadata from './block.json';
+
+/**
+ * Register the block type.
+ *
+ * PAYLOAD registered:
+ * ```
+ * {
+ *   name: "gatherpress/relations-roadmap",
+ *   edit: Edit,      // React component for the editor
+ *   save: () => null  // Dynamic block — no saved markup
+ * }
+ * ```
+ */
+registerBlockType( metadata.name, {
+	/**
+	 * Editor component — renders a compact placeholder.
+	 *
+	 * @see ./edit.js
+	 */
+	edit: Edit,
+} );
+]]></content>
+  </file>
+  <file path="src/edit.js">
+    <description>Editor component. Renders a compact, minimal placeholder in the block editor — intentionally NOT the full roadmap. Provides InspectorControls with ToggleControls so the author can choose which roadmap sections to display on the frontend. Uses useBlockProps for proper block selection and focus handling.</description>
+    <content><![CDATA[/**
+ * Edit component for the GatherPress Relations Roadmap block.
+ *
+ * HOW this component works:
+ * ─────────────────────────
+ * In the editor canvas it renders a compact placeholder card that
+ * shows the roadmap title, a brief description, and a list of the
+ * sections that are currently enabled. This keeps the editor
+ * lightweight — the full roadmap (with collapsible sections, code
+ * samples, diagrams) is rendered only on the frontend via render.php.
+ *
+ * WHY a placeholder instead of the full roadmap?
+ * 1. The roadmap is long (~3 000 words). Rendering it inside the
+ *    editor would make the post canvas unwieldy and slow to scroll.
+ * 2. The frontend version uses vanilla JS interactivity (collapsible
+ *    panels, sticky TOC) that has no editor equivalent.
+ * 3. A compact card communicates "this block exists and is configured"
+ *    without overwhelming the editing experience.
+ *
+ * The sidebar (InspectorControls) exposes six ToggleControls — one
+ * per roadmap section — so the author can choose which sections
+ * appear on the frontend.
+ *
+ * @package GatherPressRelations
+ */
+
+import { __ } from '@wordpress/i18n';
+import { useBlockProps, InspectorControls } from '@wordpress/block-editor';
+import {
+	PanelBody,
+	ToggleControl,
+	Icon,
+} from '@wordpress/components';
+
+import './editor.scss';
+
+/**
+ * Section metadata used to render both the sidebar toggles and the
+ * placeholder summary list.
+ *
+ * Each entry maps a block attribute key to a human-readable label
+ * and a Dashicon slug so the placeholder card can show a visual
+ * checklist of enabled sections.
+ *
+ * @type {Array<{key: string, label: string, icon: string}>}
+ *
+ * Example entry:
+ * ```
+ * { key: 'showDataModeling', label: 'Data Modeling & Architecture', icon: 'database' }
+ * ```
+ */
+const SECTIONS = [
+	{
+		key: 'showDataModeling',
+		label: __( 'Data Modeling & Architecture', 'gatherpress-relations' ),
+		icon: 'database',
+	},
+	{
+		key: 'showCastCrew',
+		label: __( 'Cast & Crew List Block', 'gatherpress-relations' ),
+		icon: 'groups',
+	},
+	{
+		key: 'showEnsemble',
+		label: __( 'People / Ensemble Blocks', 'gatherpress-relations' ),
+		icon: 'id-alt',
+	},
+	{
+		key: 'showVisualizations',
+		label: __( 'Smart Data-Relation Visualizations', 'gatherpress-relations' ),
+		icon: 'chart-area',
+	},
+	{
+		key: 'showScaling',
+		label: __( 'Scaling & Performance', 'gatherpress-relations' ),
+		icon: 'performance',
+	},
+	{
+		key: 'showImplementation',
+		label: __( 'Implementation Roadmap', 'gatherpress-relations' ),
+		icon: 'flag',
+	},
+];
+
+/**
+ * Editor UI for the GatherPress Relations Roadmap block.
+ *
+ * @param {Object}   props               - Block props provided by the editor.
+ * @param {Object}   props.attributes    - Current attribute values.
+ * @param {boolean}  props.attributes.showDataModeling    - Whether the Data Modeling section is visible.
+ * @param {boolean}  props.attributes.showCastCrew        - Whether the Cast & Crew section is visible.
+ * @param {boolean}  props.attributes.showEnsemble        - Whether the Ensemble section is visible.
+ * @param {boolean}  props.attributes.showVisualizations  - Whether the Visualizations section is visible.
+ * @param {boolean}  props.attributes.showScaling         - Whether the Scaling section is visible.
+ * @param {boolean}  props.attributes.showImplementation  - Whether the Implementation section is visible.
+ * @param {Function} props.setAttributes - Setter for block attributes.
+ * @returns {Element} The editor placeholder element.
+ */
+export default function Edit( { attributes, setAttributes } ) {
+	/**
+	 * `useBlockProps()` returns the HTML attributes (className, id, etc.)
+	 * that the block wrapper needs so that the editor can:
+	 * - apply the block's selection outline,
+	 * - handle drag/drop and focus,
+	 * - inject generated class names matching the `wp-block-*` pattern.
+	 */
+	const blockProps = useBlockProps();
+
+	/**
+	 * Count how many sections are currently enabled.
+	 * Used in the placeholder to give the author a quick status line
+	 * like "5 of 6 sections enabled".
+	 *
+	 * @type {number}
+	 */
+	const enabledCount = SECTIONS.filter(
+		( section ) => attributes[ section.key ]
+	).length;
+
+	return (
+		<>
+			{ /*
+			  * InspectorControls — rendered in the sidebar panel.
+			  *
+			  * WHY here?
+			  * Placing toggles in the sidebar keeps the canvas clean
+			  * while giving authors full control over which sections
+			  * render on the frontend.
+			  */ }
+			<InspectorControls>
+				<PanelBody
+					title={ __(
+						'Roadmap Sections',
+						'gatherpress-relations'
+					) }
+					initialOpen={ true }
+				>
+					{ SECTIONS.map( ( section ) => (
+						<ToggleControl
+							__nextHasNoMarginBottom
+							key={ section.key }
+							label={ section.label }
+							checked={ !! attributes[ section.key ] }
+							onChange={ ( value ) =>
+								setAttributes( {
+									[ section.key ]: value,
+								} )
+							}
+						/>
+					) ) }
+				</PanelBody>
+			</InspectorControls>
+
+			{ /*
+			  * Editor placeholder — a compact card.
+			  *
+			  * HOW it communicates:
+			  * - Title with a networking icon confirms the block type.
+			  * - Description explains what renders on the frontend.
+			  * - Section checklist shows which sections are on/off.
+			  * - A status bar summarises "X of 6 sections enabled".
+			  */ }
+			<div { ...blockProps }>
+				<div className="gatherpress-relations__editor-placeholder">
+					<div className="gatherpress-relations__editor-placeholder-header">
+						<Icon icon="networking" size={ 28 } />
+						<h3 className="gatherpress-relations__editor-placeholder-title">
+							{ __(
+								'Shadow Taxonomy Relations Roadmap',
+								'gatherpress-relations'
+							) }
+						</h3>
+					</div>
+
+					<p className="gatherpress-relations__editor-placeholder-description">
+						{ __(
+							'This block renders a comprehensive architectural roadmap on the frontend — covering shadow taxonomy data modeling, block design patterns, and scaling strategies for connecting persons to productions (or any special post type) with roles, powered by GatherPress shadow taxonomies.',
+							'gatherpress-relations'
+						) }
+					</p>
+
+					<ul className="gatherpress-relations__editor-placeholder-sections">
+						{ SECTIONS.map( ( section ) => (
+							<li
+								key={ section.key }
+								className={ `gatherpress-relations__editor-placeholder-section ${
+									attributes[ section.key ]
+										? 'gatherpress-relations__editor-placeholder-section--enabled'
+										: 'gatherpress-relations__editor-placeholder-section--disabled'
+								}` }
+							>
+								<Icon
+									icon={ section.icon }
+									size={ 16 }
+								/>
+								<span>{ section.label }</span>
+							</li>
+						) ) }
+					</ul>
+
+					<div className="gatherpress-relations__editor-placeholder-status">
+						{ enabledCount } / { SECTIONS.length }{ ' ' }
+						{ __(
+							'sections enabled',
+							'gatherpress-relations'
+						) }
+					</div>
+				</div>
+			</div>
+		</>
+	);
+}
+]]></content>
+  </file>
+  <file path="src/save.js">
+    <description>Save function — returns null because this is a dynamic block. WordPress stores only the block comment delimiter and serialized attributes in post_content. The frontend markup is produced by render.php on each request.</description>
+    <content><![CDATA[
+]]></content>
+  </file>
+  <file path="src/style.scss">
+    <description>Shared styles applied on both the frontend and in the editor. Uses BEM naming convention with the root block element "telex-theater-relations". Styles are nested per BEM methodology. Covers the full roadmap layout (TOC, sections, code blocks, diagrams, cards) and responsive breakpoints.</description>
+    <content><![CDATA[/**
+ * Shared styles for the GatherPress Relations Roadmap block.
+ *
+ * NAMING CONVENTION: BEM (Block Element Modifier)
+ * ────────────────────────────────────────────────
+ * Block:    .gatherpress-relations
+ * Element:  .gatherpress-relations__toc
+ * Modifier: .gatherpress-relations__section--collapsed
+ *
+ * WHY BEM?
+ * BEM produces flat, predictable selectors that avoid specificity wars,
+ * are easy to grep, and map cleanly to component boundaries.
+ *
+ * WHY nested?
+ * SCSS nesting mirrors the DOM tree, making it easy to see which
+ * styles belong to which sub-component. Each nesting level corresponds
+ * to a BEM element or modifier.
+ *
+ * HOW colours work:
+ * We use CSS custom properties with fallback values so the block
+ * inherits theme tokens when available but remains legible in any theme.
+ *
+ * @package GatherPressRelations
+ */
+
+/* ──────────────────────────────────────────────
+ * CSS Custom Properties — design tokens
+ * ────────────────────────────────────────────── */
+:root {
+	/**
+	 * WHY custom properties?
+	 * They let us define the palette once and reference it everywhere.
+	 * A theme can override these via its own :root declaration or
+	 * through theme.json custom values.
+	 */
+	--gpr-color-bg: #f9fafb;
+	--gpr-color-surface: #ffffff;
+	--gpr-color-border: #e2e8f0;
+	--gpr-color-text: #1e293b;
+	--gpr-color-text-muted: #64748b;
+	--gpr-color-primary: #3b82f6;
+	--gpr-color-primary-hover: #2563eb;
+	--gpr-color-primary-light: #eff6ff;
+	--gpr-color-accent: #8b5cf6;
+	--gpr-color-accent-light: #f5f3ff;
+	--gpr-color-success: #10b981;
+	--gpr-color-success-light: #ecfdf5;
+	--gpr-color-warning: #f59e0b;
+	--gpr-color-warning-light: #fffbeb;
+	--gpr-color-code-bg: #1e293b;
+	--gpr-color-code-text: #e2e8f0;
+	--gpr-radius-sm: 6px;
+	--gpr-radius-md: 10px;
+	--gpr-radius-lg: 16px;
+	--gpr-shadow-sm: 0 1px 3px rgb(0 0 0 / 0.08);
+	--gpr-shadow-md: 0 4px 12px rgb(0 0 0 / 0.1);
+	--gpr-font-mono: "SF Mono", "Fira Code", "Cascadia Code", "Consolas", monospace;
+}
+
+/* ──────────────────────────────────────────────
+ * Block root
+ * ────────────────────────────────────────────── */
+.wp-block-gatherpress-relations-roadmap {
+	/**
+	 * WHY max-width on the block root?
+	 * When the block is used without "wide" or "full" alignment, this
+	 * caps the content width for comfortable reading (~80ch).
+	 * The wide/full alignment classes override this via WordPress's
+	 * built-in alignment styles.
+	 */
+	max-width: 100%;
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+	line-height: 1.65;
+	color: var(--gpr-color-text);
+}
+
+/* ──────────────────────────────────────────────
+ * Roadmap wrapper — holds TOC + sections
+ * ────────────────────────────────────────────── */
+.gatherpress-relations {
+	/**
+	 * WHY a two-column grid?
+	 * The left column holds the sticky table of contents (TOC).
+	 * The right column holds the scrollable roadmap sections.
+	 * On mobile (<768px) this collapses to a single column.
+	 */
+	display: grid;
+	grid-template-columns: 260px 1fr;
+	gap: 2rem;
+	position: relative;
+
+	/**
+	 * Responsive: single column on narrow viewports.
+	 */
+	@media (max-width: 899px) {
+		grid-template-columns: 1fr;
+	}
+
+	/* ── Table of Contents ────────────────────── */
+
+	/**
+	 * The TOC sidebar. Sticks to the top of the viewport so the user
+	 * can navigate sections without scrolling back up.
+	 *
+	 * WHY sticky?
+	 * Long roadmap content can span many viewport-heights. A sticky
+	 * TOC keeps navigation always within reach.
+	 *
+	 * HOW the active state works:
+	 * view.js uses IntersectionObserver to detect which section is
+	 * in view, then toggles .gatherpress-relations__toc-link--active
+	 * on the corresponding TOC link.
+	 */
+	&__toc {
+		position: sticky;
+		top: calc(var(--wp-admin--admin-bar--height, 0px) + 2rem);
+		align-self: start;
+		background: var(--gpr-color-surface);
+		border: 1px solid var(--gpr-color-border);
+		border-radius: var(--gpr-radius-lg);
+		padding: 1.5rem;
+		box-shadow: var(--gpr-shadow-sm);
+		max-height: calc(100vh - var(--wp-admin--admin-bar--height, 0px) - 4rem);
+		overflow-y: auto;
+
+		@media (max-width: 899px) {
+			/**
+			 * On mobile the TOC is not sticky — it flows inline
+			 * above the content so it doesn't consume permanent
+			 * screen real-estate.
+			 */
+			position: static;
+			max-height: none;
+		}
+	}
+
+	&__toc-title {
+		font-size: 0.75rem;
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+		color: var(--gpr-color-text-muted);
+		margin: 0 0 1rem;
+		padding-bottom: 0.75rem;
+		border-bottom: 1px solid var(--gpr-color-border);
+	}
+
+	&__toc-list {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+	}
+
+	&__toc-item {
+		margin: 0;
+		padding: 0;
+	}
+
+	/**
+	 * TOC link — each link targets a section by ID.
+	 *
+	 * WHY a left border instead of background?
+	 * A left-border indicator is a common pattern in documentation
+	 * UIs (VS Code, GitHub). It draws the eye without occluding
+	 * the label text.
+	 */
+	&__toc-link {
+		display: block;
+		padding: 0.5rem 0.75rem;
+		font-size: 0.85rem;
+		color: var(--gpr-color-text-muted);
+		text-decoration: none;
+		border-left: 3px solid transparent;
+		border-radius: 0 var(--gpr-radius-sm) var(--gpr-radius-sm) 0;
+		transition: all 0.2s ease;
+
+		&:hover {
+			color: var(--gpr-color-primary);
+			background: var(--gpr-color-primary-light);
+			border-left-color: var(--gpr-color-primary);
+		}
+
+		/**
+		 * Active state — applied by view.js when the section
+		 * enters the viewport via IntersectionObserver.
+		 */
+		&--active {
+			color: var(--gpr-color-primary);
+			background: var(--gpr-color-primary-light);
+			border-left-color: var(--gpr-color-primary);
+			font-weight: 600;
+		}
+	}
+
+	/* ── Sections container ───────────────────── */
+	&__content {
+		min-width: 0; /* Prevent grid blowout from <pre> elements. */
+	}
+
+	/* ── Roadmap header ───────────────────────── */
+	&__header {
+		margin-bottom: 2rem;
+		padding: 2rem;
+		background: linear-gradient(135deg, var(--gpr-color-primary-light) 0%, var(--gpr-color-accent-light) 100%);
+		border-radius: var(--gpr-radius-lg);
+		border: 1px solid var(--gpr-color-border);
+	}
+
+	&__main-title {
+		font-size: 1.75rem;
+		font-weight: 800;
+		margin: 0 0 0.5rem;
+		color: var(--gpr-color-text);
+		line-height: 1.2;
+	}
+
+	&__subtitle {
+		font-size: 1rem;
+		color: var(--gpr-color-text-muted);
+		margin: 0;
+		line-height: 1.5;
+	}
+
+	/* ── Individual section ───────────────────── */
+
+	/**
+	 * Each roadmap section is a collapsible panel.
+	 *
+	 * HOW collapsing works:
+	 * view.js toggles the --collapsed modifier on the section element.
+	 * The body (__section-body) uses max-height + overflow: hidden
+	 * for a smooth CSS transition.
+	 */
+	&__section {
+		background: var(--gpr-color-surface);
+		border: 1px solid var(--gpr-color-border);
+		border-radius: var(--gpr-radius-lg);
+		margin-bottom: 1.25rem;
+		box-shadow: var(--gpr-shadow-sm);
+		overflow: hidden;
+		transition: box-shadow 0.2s ease;
+
+		&:hover {
+			box-shadow: var(--gpr-shadow-md);
+		}
+
+		/**
+		 * Collapsed modifier — hides the section body.
+		 *
+		 * WHY max-height instead of display:none?
+		 * max-height can be transitioned, giving a smooth
+		 * expand/collapse animation. display:none cannot.
+		 */
+		&--collapsed {
+			.gatherpress-relations__section-body {
+				max-height: 0;
+				padding-top: 0;
+				padding-bottom: 0;
+				opacity: 0;
+			}
+
+			.gatherpress-relations__section-chevron {
+				transform: rotate(-90deg);
+			}
+		}
+	}
+
+	/**
+	 * Section header — clickable toggle for collapse/expand.
+	 *
+	 * WHY a <button>?
+	 * render.php outputs a <button> element so keyboard users can
+	 * toggle sections with Enter/Space. This div styles the inner
+	 * layout of that button.
+	 */
+	&__section-header {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		padding: 1.25rem 1.5rem;
+		cursor: pointer;
+		background: none;
+		border: none;
+		width: 100%;
+		text-align: left;
+		font: inherit;
+		color: inherit;
+		appearance: none;
+		transition: background 0.15s ease;
+
+		&:hover {
+			background: var(--gpr-color-bg);
+		}
+
+		&:focus-visible {
+			outline: 2px solid var(--gpr-color-primary);
+			outline-offset: -2px;
+		}
+	}
+
+	/**
+	 * Section number badge — a small circle with the section index.
+	 */
+	&__section-number {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 32px;
+		height: 32px;
+		border-radius: 50%;
+		background: var(--gpr-color-primary);
+		color: #fff;
+		font-size: 0.8rem;
+		font-weight: 700;
+		flex-shrink: 0;
+	}
+
+	&__section-title {
+		flex: 1;
+		font-size: 1.1rem;
+		font-weight: 700;
+		margin: 0;
+		color: var(--gpr-color-text);
+	}
+
+	&__section-chevron {
+		font-size: 1.2rem;
+		color: var(--gpr-color-text-muted);
+		transition: transform 0.25s ease;
+		flex-shrink: 0;
+		line-height: 1;
+	}
+
+	/**
+	 * Section body — the collapsible content area.
+	 *
+	 * HOW the transition works:
+	 * max-height transitions from a large value (5000px, enough for
+	 * any section) to 0 when --collapsed is applied. The actual
+	 * content height is always less than 5000px, so the transition
+	 * duration scales naturally.
+	 */
+	&__section-body {
+		padding: 0 1.5rem 1.5rem;
+		max-height: 5000px;
+		opacity: 1;
+		overflow: hidden;
+		transition: max-height 0.4s ease, opacity 0.3s ease, padding 0.3s ease;
+	}
+
+	/* ── Content typography ───────────────────── */
+
+	&__heading {
+		font-size: 1rem;
+		font-weight: 700;
+		margin: 1.5rem 0 0.75rem;
+		color: var(--gpr-color-text);
+
+		&:first-child {
+			margin-top: 0;
+		}
+	}
+
+	&__paragraph {
+		margin: 0 0 1rem;
+		color: var(--gpr-color-text);
+		line-height: 1.7;
+	}
+
+	&__strong {
+		font-weight: 700;
+		color: var(--gpr-color-text);
+	}
+
+	&__em {
+		font-style: italic;
+	}
+
+	/* ── Code blocks ──────────────────────────── */
+
+	/**
+	 * Code block wrapper — dark background for contrast.
+	 *
+	 * WHY a dark theme?
+	 * Code blocks use a dark background to visually separate
+	 * them from prose, matching the convention in documentation
+	 * sites (MDN, WordPress Developer Resources, etc.).
+	 */
+	&__code-block {
+		background: var(--gpr-color-code-bg);
+		border-radius: var(--gpr-radius-md);
+		padding: 1.25rem 1.5rem;
+		margin: 1rem 0;
+		overflow-x: auto;
+		border: 1px solid rgba(255, 255, 255, 0.08);
+	}
+
+	&__code {
+		font-family: var(--gpr-font-mono);
+		font-size: 0.82rem;
+		color: var(--gpr-color-code-text);
+		line-height: 1.6;
+		white-space: pre;
+		display: block;
+	}
+
+	/**
+	 * Inline code — used for short references like function names,
+	 * hook names, or attribute keys within prose.
+	 */
+	&__inline-code {
+		font-family: var(--gpr-font-mono);
+		font-size: 0.85em;
+		background: var(--gpr-color-bg);
+		padding: 0.15em 0.4em;
+		border-radius: 4px;
+		border: 1px solid var(--gpr-color-border);
+		color: var(--gpr-color-accent);
+	}
+
+	/* ── Info / tip / warning cards ───────────── */
+
+	/**
+	 * Callout card — used for tips, warnings, and important notes.
+	 *
+	 * Modifiers set the left-border colour and background:
+	 * --tip:     green (success)
+	 * --warning: amber (warning)
+	 * --info:    blue  (primary)
+	 * --key:     purple (accent)
+	 */
+	&__callout {
+		padding: 1rem 1.25rem;
+		border-radius: var(--gpr-radius-md);
+		margin: 1rem 0;
+		border-left: 4px solid var(--gpr-color-primary);
+		background: var(--gpr-color-primary-light);
+
+		&--tip {
+			border-left-color: var(--gpr-color-success);
+			background: var(--gpr-color-success-light);
+		}
+
+		&--warning {
+			border-left-color: var(--gpr-color-warning);
+			background: var(--gpr-color-warning-light);
+		}
+
+		&--info {
+			border-left-color: var(--gpr-color-primary);
+			background: var(--gpr-color-primary-light);
+		}
+
+		&--key {
+			border-left-color: var(--gpr-color-accent);
+			background: var(--gpr-color-accent-light);
+		}
+	}
+
+	&__callout-title {
+		font-weight: 700;
+		font-size: 0.85rem;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		margin: 0 0 0.35rem;
+	}
+
+	&__callout-text {
+		margin: 0;
+		font-size: 0.92rem;
+		line-height: 1.6;
+	}
+
+	/* ── Diagram / visual cards ───────────────── */
+
+	/**
+	 * Diagram container — holds ASCII art or visual relationship
+	 * representations.
+	 *
+	 * WHY monospace?
+	 * ASCII diagrams require fixed-width characters to maintain
+	 * alignment. The dark background and code font distinguish
+	 * diagrams from prose.
+	 */
+	&__diagram {
+		background: var(--gpr-color-code-bg);
+		border-radius: var(--gpr-radius-md);
+		padding: 1.5rem;
+		margin: 1rem 0;
+		overflow-x: auto;
+		border: 1px solid rgba(255, 255, 255, 0.08);
+	}
+
+	&__diagram-content {
+		font-family: var(--gpr-font-mono);
+		font-size: 0.8rem;
+		color: var(--gpr-color-code-text);
+		line-height: 1.5;
+		white-space: pre;
+		display: block;
+	}
+
+	&__diagram-caption {
+		display: block;
+		margin-top: 0.75rem;
+		font-size: 0.78rem;
+		color: var(--gpr-color-text-muted);
+		text-align: center;
+		font-style: italic;
+		font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+	}
+
+	/* ── Comparison table ─────────────────────── */
+
+	/**
+	 * Table for comparing approaches (CPT vs Taxonomy vs Users).
+	 */
+	&__table-wrap {
+		overflow-x: auto;
+		margin: 1rem 0;
+		border-radius: var(--gpr-radius-md);
+		border: 1px solid var(--gpr-color-border);
+	}
+
+	&__table {
+		width: 100%;
+		border-collapse: collapse;
+		font-size: 0.88rem;
+
+		th,
+		td {
+			padding: 0.7rem 1rem;
+			text-align: left;
+			border-bottom: 1px solid var(--gpr-color-border);
+		}
+
+		th {
+			background: var(--gpr-color-bg);
+			font-weight: 700;
+			font-size: 0.8rem;
+			text-transform: uppercase;
+			letter-spacing: 0.04em;
+			color: var(--gpr-color-text-muted);
+		}
+
+		tr:last-child td {
+			border-bottom: none;
+		}
+
+		tr:hover td {
+			background: var(--gpr-color-primary-light);
+		}
+	}
+
+	/* ── Unordered & ordered lists ────────────── */
+	&__list {
+		margin: 0.75rem 0;
+		padding-left: 1.5rem;
+
+		li {
+			margin-bottom: 0.4rem;
+			line-height: 1.6;
+		}
+	}
+
+	/* ── Phase / milestone cards ──────────────── */
+
+	/**
+	 * Phase card — used in the Implementation Roadmap section
+	 * to show milestones with colour-coded priority indicators.
+	 */
+	&__phase {
+		background: var(--gpr-color-bg);
+		border: 1px solid var(--gpr-color-border);
+		border-radius: var(--gpr-radius-md);
+		padding: 1.25rem;
+		margin: 0.75rem 0;
+
+		&--alpha {
+			border-left: 4px solid var(--gpr-color-success);
+		}
+
+		&--beta {
+			border-left: 4px solid var(--gpr-color-primary);
+		}
+
+		&--ga {
+			border-left: 4px solid var(--gpr-color-accent);
+		}
+
+		&--future {
+			border-left: 4px solid var(--gpr-color-warning);
+		}
+	}
+
+	&__phase-title {
+		font-weight: 700;
+		font-size: 0.95rem;
+		margin: 0 0 0.5rem;
+	}
+
+	&__phase-text {
+		margin: 0;
+		font-size: 0.9rem;
+		color: var(--gpr-color-text-muted);
+		line-height: 1.6;
+	}
+}
+]]></content>
+  </file>
+  <file path="src/editor.scss">
+    <description>Editor-only styles for the compact placeholder card. These styles are applied only inside the block editor and do not affect the frontend rendering. Uses BEM naming nested under the block's editor-placeholder element.</description>
+    <content><![CDATA[/**
+ * Editor-only styles for the GatherPress Relations Roadmap block.
+ *
+ * HOW these are scoped:
+ * ─────────────────────
+ * block.json declares `editorStyle: "file:./index.css"` which maps
+ * to the compiled output of this file. WordPress enqueues it only
+ * in the editor context, so none of these rules reach the frontend.
+ *
+ * WHY a separate file?
+ * The editor shows a compact placeholder (see edit.js), not the full
+ * roadmap. These styles exclusively support that placeholder card.
+ * Mixing them into style.scss would create dead CSS on the frontend.
+ *
+ * @package GatherPressRelations
+ */
+
+.wp-block-gatherpress-relations-roadmap {
+	/**
+	 * Placeholder card wrapper.
+	 *
+	 * WHY a border + gradient background?
+	 * The gradient communicates "this is a special informational block"
+	 * and visually differentiates it from plain paragraph blocks in the
+	 * editor canvas.
+	 */
+	.gatherpress-relations__editor-placeholder {
+		background: linear-gradient(135deg, #eff6ff 0%, #f5f3ff 100%);
+		border: 1px solid #e2e8f0;
+		border-radius: 12px;
+		padding: 1.75rem;
+		min-height: 140px;
+	}
+
+	/**
+	 * Header row — icon + title side by side.
+	 */
+	.gatherpress-relations__editor-placeholder-header {
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		margin-bottom: 0.75rem;
+
+		/**
+		 * Override the default Dashicon colour to match the primary blue.
+		 */
+		.dashicon,
+		svg {
+			fill: #3b82f6;
+			color: #3b82f6;
+		}
+	}
+
+	/**
+	 * Placeholder title — visually prominent but smaller than an <h2>.
+	 */
+	.gatherpress-relations__editor-placeholder-title {
+		margin: 0;
+		font-size: 1.15rem;
+		font-weight: 700;
+		color: #1e293b;
+	}
+
+	/**
+	 * Short description of what the block does on the frontend.
+	 */
+	.gatherpress-relations__editor-placeholder-description {
+		font-size: 0.88rem;
+		color: #64748b;
+		line-height: 1.55;
+		margin: 0 0 1rem;
+	}
+
+	/**
+	 * Section checklist — a visual list of toggleable sections.
+	 */
+	.gatherpress-relations__editor-placeholder-sections {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 0.35rem 1rem;
+
+		@media (max-width: 600px) {
+			grid-template-columns: 1fr;
+		}
+	}
+
+	/**
+	 * Individual section item in the checklist.
+	 * Uses a flex layout for icon + label alignment.
+	 */
+	.gatherpress-relations__editor-placeholder-section {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+		font-size: 0.82rem;
+		padding: 0.3rem 0.5rem;
+		border-radius: 6px;
+		transition: opacity 0.15s ease;
+
+		.dashicon,
+		svg {
+			width: 16px;
+			height: 16px;
+		}
+
+		/**
+		 * Enabled modifier — full opacity + primary icon colour.
+		 */
+		&--enabled {
+			color: #1e293b;
+
+			.dashicon,
+			svg {
+				fill: #3b82f6;
+				color: #3b82f6;
+			}
+		}
+
+		/**
+		 * Disabled modifier — reduced opacity signals the section
+		 * is toggled off and won't render on the frontend.
+		 */
+		&--disabled {
+			opacity: 0.4;
+			color: #94a3b8;
+
+			.dashicon,
+			svg {
+				fill: #94a3b8;
+				color: #94a3b8;
+			}
+		}
+	}
+
+	/**
+	 * Status bar — "X of 6 sections enabled".
+	 * Positioned at the bottom of the placeholder card as a subtle
+	 * summary line.
+	 */
+	.gatherpress-relations__editor-placeholder-status {
+		margin-top: 1rem;
+		padding-top: 0.75rem;
+		border-top: 1px solid #e2e8f0;
+		font-size: 0.78rem;
+		font-weight: 600;
+		color: #64748b;
+		text-align: right;
+	}
+}
+]]></content>
+  </file>
+  <file path="src/view.js">
+    <description>Frontend interactivity script. Adds collapsible section toggling, smooth-scroll TOC navigation, and IntersectionObserver-based active-link highlighting. Uses plain JavaScript with standard DOM APIs — no frameworks, no Interactivity API.</description>
+    <content><![CDATA[/**
+ * Frontend interactivity for the GatherPress Relations Roadmap block.
+ *
+ * WHAT this script does:
+ * ──────────────────────
+ * 1. **Collapsible sections** — Each section header is a <button> that
+ *    toggles the `--collapsed` modifier on its parent. The CSS transition
+ *    on `max-height` and `opacity` produces a smooth expand/collapse.
+ *
+ * 2. **Smooth-scroll TOC links** — Clicking a TOC link scrolls the
+ *    target section into view with `scrollIntoView({ behavior: 'smooth' })`.
+ *
+ * 3. **Active TOC highlighting** — An IntersectionObserver watches each
+ *    section. When a section enters the viewport, its corresponding TOC
+ *    link receives the `--active` modifier class.
+ *
+ * WHY plain JavaScript?
+ * WordPress coding standards for blocks recommend plain JS with standard
+ * DOM APIs for frontend interactivity. This avoids framework dependencies,
+ * keeps the bundle tiny, and ensures compatibility with any theme.
+ *
+ * HOW multiple block instances are handled:
+ * `querySelectorAll` finds all block instances on the page. Each instance
+ * is initialised independently inside a `forEach` loop, so multiple
+ * roadmap blocks on the same page do not interfere with each other.
+ *
+ * @package GatherPressRelations
+ */
+
+document.addEventListener( 'DOMContentLoaded', () => {
+	/**
+	 * Find every instance of the roadmap block on the page.
+	 *
+	 * WHY querySelectorAll?
+	 * A page may contain multiple roadmap blocks (unlikely but possible).
+	 * querySelectorAll returns a NodeList of all matches, and we
+	 * initialise each one independently.
+	 *
+	 * @type {NodeListOf<HTMLElement>}
+	 */
+	const blocks = document.querySelectorAll(
+		'.wp-block-gatherpress-relations-roadmap'
+	);
+
+	blocks.forEach( ( block ) => {
+		initCollapsibleSections( block );
+		initTocNavigation( block );
+		initTocHighlighting( block );
+	} );
+} );
+
+/**
+ * Initialises collapsible section toggling for a single block instance.
+ *
+ * HOW it works:
+ * ─────────────
+ * Each section header is a <button> with `aria-expanded` and
+ * `aria-controls` attributes (set by render.php). Clicking the button:
+ * 1. Toggles the `--collapsed` CSS modifier on the section wrapper.
+ * 2. Flips the `aria-expanded` attribute for screen readers.
+ *
+ * WHY aria-expanded?
+ * It communicates the expand/collapse state to assistive technology.
+ * Screen readers announce "collapsed" or "expanded" when the user
+ * focuses the button.
+ *
+ * @param {HTMLElement} block - The block root element.
+ * @returns {void}
+ */
+function initCollapsibleSections( block ) {
+	const headers = block.querySelectorAll(
+		'.gatherpress-relations__section-header'
+	);
+
+	headers.forEach( ( header ) => {
+		header.addEventListener( 'click', () => {
+			/**
+			 * The section wrapper is the parent of the <button>.
+			 *
+			 * DOM structure (from render.php):
+			 * ```html
+			 * <div class="gatherpress-relations__section" id="ttr-section-1">
+			 *   <button class="gatherpress-relations__section-header" aria-expanded="true" aria-controls="ttr-body-1">
+			 *     ...
+			 *   </button>
+			 *   <div class="gatherpress-relations__section-body" id="ttr-body-1">
+			 *     ...
+			 *   </div>
+			 * </div>
+			 * ```
+			 */
+			const section = header.closest(
+				'.gatherpress-relations__section'
+			);
+
+			if ( ! section ) {
+				return;
+			}
+
+			const isCollapsed = section.classList.toggle(
+				'gatherpress-relations__section--collapsed'
+			);
+
+			/**
+			 * Update ARIA state.
+			 *
+			 * WHY string 'true'/'false'?
+			 * `aria-expanded` is a string attribute, not a boolean
+			 * DOM property. Setting it to the boolean `true` would
+			 * work in most browsers but the spec defines it as an
+			 * enumerated string.
+			 */
+			header.setAttribute(
+				'aria-expanded',
+				isCollapsed ? 'false' : 'true'
+			);
+		} );
+	} );
+}
+
+/**
+ * Initialises smooth-scroll behaviour for TOC links.
+ *
+ * HOW it works:
+ * ─────────────
+ * Each TOC link has an `href` like `#ttr-section-1`. Clicking it:
+ * 1. Prevents the default hash-jump.
+ * 2. Finds the target element by ID.
+ * 3. Scrolls it into view with `behavior: 'smooth'`.
+ * 4. Updates the URL hash without a jump (via `history.pushState`).
+ *
+ * WHY pushState instead of default hash navigation?
+ * Default hash navigation causes an instant jump to the target.
+ * `pushState` + `scrollIntoView` gives us smooth scrolling while
+ * still updating the URL for shareability and back-button support.
+ *
+ * @param {HTMLElement} block - The block root element.
+ * @returns {void}
+ */
+function initTocNavigation( block ) {
+	const tocLinks = block.querySelectorAll(
+		'.gatherpress-relations__toc-link'
+	);
+
+	tocLinks.forEach( ( link ) => {
+		link.addEventListener( 'click', ( event ) => {
+			event.preventDefault();
+
+			const targetId = link.getAttribute( 'href' );
+
+			if ( ! targetId ) {
+				return;
+			}
+
+			/**
+			 * Find the target section within the document (not scoped
+			 * to the block) because IDs are document-global.
+			 *
+			 * @type {HTMLElement|null}
+			 */
+			const target = document.querySelector( targetId );
+
+			if ( ! target ) {
+				return;
+			}
+
+			/**
+			 * Scroll with an offset to account for the admin bar
+			 * and any sticky headers.
+			 *
+			 * WHY 'smooth'?
+			 * Smooth scrolling is a better UX than an instant jump
+			 * for intra-page navigation. The browser handles the
+			 * easing natively.
+			 */
+			target.scrollIntoView( {
+				behavior: 'smooth',
+				block: 'start',
+			} );
+
+			/**
+			 * Update the URL hash so the section is linkable.
+			 */
+			if ( window.history && window.history.pushState ) {
+				window.history.pushState( null, '', targetId );
+			}
+
+			/**
+			 * If the section is collapsed, expand it so the user
+			 * sees the content they navigated to.
+			 */
+			if (
+				target.classList.contains(
+					'gatherpress-relations__section--collapsed'
+				)
+			) {
+				target.classList.remove(
+					'gatherpress-relations__section--collapsed'
+				);
+				const headerBtn = target.querySelector(
+					'.gatherpress-relations__section-header'
+				);
+				if ( headerBtn ) {
+					headerBtn.setAttribute( 'aria-expanded', 'true' );
+				}
+			}
+		} );
+	} );
+}
+
+/**
+ * Highlights the active TOC link based on scroll position.
+ *
+ * HOW it works:
+ * ─────────────
+ * An IntersectionObserver watches each section element. When a section's
+ * top edge crosses the 20% line from the top of the viewport (the
+ * `rootMargin`), the observer fires and we mark its TOC link as active.
+ *
+ * WHY IntersectionObserver instead of scroll events?
+ * 1. Performance — IO is optimised by the browser and does not fire
+ *    on every scroll pixel.
+ * 2. Accuracy — threshold-based detection is more reliable than manual
+ *    offset calculations, especially with sticky headers or admin bars.
+ * 3. Battery — fewer CPU wake-ups on mobile devices.
+ *
+ * PAYLOAD (IntersectionObserverEntry):
+ * ```
+ * {
+ *   target:          HTMLElement,    // the observed section
+ *   isIntersecting:  boolean,       // whether it crosses the root margin
+ *   intersectionRatio: number,      // 0–1, how much is visible
+ *   boundingClientRect: DOMRect,
+ *   rootBounds:      DOMRect | null
+ * }
+ * ```
+ *
+ * @param {HTMLElement} block - The block root element.
+ * @returns {void}
+ */
+function initTocHighlighting( block ) {
+	const sections = block.querySelectorAll(
+		'.gatherpress-relations__section'
+	);
+	const tocLinks = block.querySelectorAll(
+		'.gatherpress-relations__toc-link'
+	);
+
+	if ( sections.length === 0 || tocLinks.length === 0 ) {
+		return;
+	}
+
+	/**
+	 * Observer options.
+	 *
+	 * WHY rootMargin: '-20% 0px -70% 0px'?
+	 * This creates an observation zone that spans from 20% below the
+	 * top of the viewport to 30% above the bottom. When a section's
+	 * top edge enters this band, it's considered "in view". This
+	 * compensates for the admin bar and ensures the active link
+	 * updates before the section fills the screen.
+	 *
+	 * @type {IntersectionObserverInit}
+	 */
+	const observerOptions = {
+		root: null,
+		rootMargin: '-20% 0px -70% 0px',
+		threshold: 0,
+	};
+
+	const observer = new IntersectionObserver( ( entries ) => {
+		entries.forEach( ( entry ) => {
+			if ( ! entry.isIntersecting ) {
+				return;
+			}
+
+			const sectionId = entry.target.getAttribute( 'id' );
+
+			if ( ! sectionId ) {
+				return;
+			}
+
+			/**
+			 * Remove the active class from all TOC links in this
+			 * block instance, then add it to the matching link.
+			 *
+			 * WHY scoped to the block?
+			 * Multiple block instances should not interfere with
+			 * each other's TOC highlighting.
+			 */
+			tocLinks.forEach( ( link ) => {
+				link.classList.remove(
+					'gatherpress-relations__toc-link--active'
+				);
+			} );
+
+			const activeLink = block.querySelector(
+				`.gatherpress-relations__toc-link[href="#${ sectionId }"]`
+			);
+
+			if ( activeLink ) {
+				activeLink.classList.add(
+					'gatherpress-relations__toc-link--active'
+				);
+			}
+		} );
+	}, observerOptions );
+
+	/**
+	 * Observe each section element.
+	 */
+	sections.forEach( ( section ) => {
+		observer.observe( section );
+	} );
+}]]></content>
+  </file>
+  <file path="src/render.php">
+    <description>Server-side render callback for the block. Uses a Singleton-like renderer class to encapsulate section data and HTML generation. Outputs the full roadmap with TOC, collapsible sections, code blocks, comparison tables, diagrams, and implementation phases. Each section can be toggled via block attributes.</description>
+    <content><![CDATA[<?php
+/**
+ * Server-side render callback for the GatherPress Relations Roadmap block.
+ *
+ * HOW this file is invoked:
+ * ─────────────────────────
+ * block.json declares `"render": "file:./render.php"`. When WordPress
+ * encounters the block delimiter in post_content, it `require`s this
+ * file, making `$attributes`, `$content`, and `$block` available in
+ * the local scope.
+ *
+ * WHY a Singleton renderer class?
+ * The roadmap contains ~6 large sections with structured content
+ * (HTML, code samples, tables, diagrams). Organising this as methods
+ * on a class:
+ * 1. Keeps the global scope clean.
+ * 2. Allows each section to be toggled by checking `$attributes`.
+ * 3. Makes the rendering logic testable in isolation.
+ * 4. Uses the Singleton pattern so the class is instantiated exactly
+ *    once even if the block appears multiple times on a page.
+ *
+ * AVAILABLE VARIABLES (provided by WordPress):
+ * ```
+ * $attributes = [
+ *     'showDataModeling'    => bool,
+ *     'showCastCrew'        => bool,
+ *     'showEnsemble'        => bool,
+ *     'showVisualizations'  => bool,
+ *     'showScaling'         => bool,
+ *     'showImplementation'  => bool,
+ * ];
+ * $content = '';            // Empty for dynamic blocks.
+ * $block   = WP_Block;     // The parsed block instance.
+ * ```
+ *
+ * ARCHITECTURAL CONTEXT — FIXED DECISIONS:
+ * ────────────────────────────────────────
+ * 1. Both "people" and "productions" are POST TYPES, not taxonomies.
+ * 2. The production post type (`gatherpress_play`) is registered by
+ *    gatherpress-productions plugin — we consume it, never register it.
+ * 3. We register a new `gatherpress_person` post type with
+ *    `gatherpress-shadow-source` support, which auto-creates a
+ *    `_gatherpress_person` shadow taxonomy.
+ * 4. All new functionality is gated behind the `gatherpress-relations`
+ *    post_type_supports string. Nothing is hard-bound to any post type
+ *    slug. Any CPT can opt in by declaring the support.
+ * 5. Consumer post types tag themselves with shadow taxonomy terms to
+ *    model relationships — same mechanism as venue ↔ event tagging.
+ * 6. Roles are relationship metadata stored as structured post meta
+ *    (`_gatherpress_relations`) on the consumer post.
+ * 7. The pattern is agnostic — it works for any "special post type →
+ *    person" connection: theater cast, event organizers, speakers, etc.
+ * 8. Discovery of supporting post types uses WP core's
+ *    `get_post_types_by_support( 'gatherpress-relations' )`.
+ * 9. All wiring runs on `init` at priority 100 to ensure every CPT
+ *    is already registered.
+ *
+ * @package GatherPressRelations
+ */
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
+
+if ( ! class_exists( 'GatherPress_Relations_Renderer' ) ) {
+
+	/**
+	 * Class GatherPress_Relations_Renderer
+	 *
+	 * Singleton renderer that produces the complete roadmap HTML.
+	 *
+	 * WHY Singleton?
+	 * If multiple roadmap blocks exist on the same page, each
+	 * `require` of render.php would try to re-declare the class.
+	 * The `class_exists` guard above prevents that. Internally,
+	 * `get_instance()` ensures only one renderer object exists,
+	 * avoiding redundant data structures in memory.
+	 *
+	 * @since 0.1.0
+	 */
+	class GatherPress_Relations_Renderer {
+
+		/**
+		 * Singleton instance.
+		 *
+		 * @since 0.1.0
+		 * @var self|null
+		 */
+		private static ?self $instance = null;
+
+		/**
+		 * Returns the single renderer instance.
+		 *
+		 * @since  0.1.0
+		 * @return self
+		 */
+		public static function get_instance(): self {
+			if ( null === self::$instance ) {
+				self::$instance = new self();
+			}
+			return self::$instance;
+		}
+
+		/**
+		 * Private constructor — enforces Singleton access.
+		 *
+		 * @since 0.1.0
+		 */
+		private function __construct() {}
+
+		/**
+		 * Renders the complete roadmap block HTML.
+		 *
+		 * HOW the output is structured:
+		 * ```
+		 * <div {block-wrapper-attributes}>
+		 *   <div class="gatherpress-relations">
+		 *     <nav class="__toc">         <!-- Table of Contents -->
+		 *     <div class="__content">     <!-- Scrollable sections -->
+		 *       <header class="__header"> <!-- Title + subtitle -->
+		 *       <div class="__section">   <!-- One per toggled section -->
+		 *     </div>
+		 *   </div>
+		 * </div>
+		 * ```
+		 *
+		 * @since  0.1.0
+		 * @param  array<string, mixed> $attributes Block attributes from the editor.
+		 * @return string Complete HTML for the roadmap.
+		 */
+		public function render( array $attributes ): string {
+			$sections = $this->get_sections( $attributes );
+
+			ob_start();
+			?>
+			<div <?php echo get_block_wrapper_attributes(); ?>>
+				<div class="gatherpress-relations">
+					<?php echo $this->render_toc( $sections ); ?>
+					<div class="gatherpress-relations__content">
+						<?php echo $this->render_header(); ?>
+						<?php
+						foreach ( $sections as $index => $section ) {
+							echo $this->render_section( $section, $index + 1 );
+						}
+						?>
+					</div>
+				</div>
+			</div>
+			<?php
+			return ob_get_clean();
+		}
+
+		/**
+		 * Builds the list of sections that should be rendered.
+		 *
+		 * HOW it works:
+		 * Each section is an associative array with an `id`, `title`,
+		 * and `content_method` (the name of the method that generates
+		 * the section body HTML). Sections are included only if their
+		 * corresponding attribute is truthy.
+		 *
+		 * @since  0.1.0
+		 * @param  array<string, mixed> $attributes Block attributes.
+		 * @return array<int, array{id: string, title: string, content_method: string}> Enabled sections.
+		 */
+		private function get_sections( array $attributes ): array {
+			$all_sections = array(
+				array(
+					'attr_key'       => 'showDataModeling',
+					'id'             => 'gpr-section-1',
+					'title'          => __( 'Data Modeling & Architecture', 'gatherpress-relations' ),
+					'content_method' => 'render_data_modeling',
+				),
+				array(
+					'attr_key'       => 'showCastCrew',
+					'id'             => 'gpr-section-2',
+					'title'          => __( 'Cast & Crew List Block', 'gatherpress-relations' ),
+					'content_method' => 'render_cast_crew',
+				),
+				array(
+					'attr_key'       => 'showEnsemble',
+					'id'             => 'gpr-section-3',
+					'title'          => __( 'People / Ensemble Blocks', 'gatherpress-relations' ),
+					'content_method' => 'render_ensemble',
+				),
+				array(
+					'attr_key'       => 'showVisualizations',
+					'id'             => 'gpr-section-4',
+					'title'          => __( 'Smart Data-Relation Visualizations', 'gatherpress-relations' ),
+					'content_method' => 'render_visualizations',
+				),
+				array(
+					'attr_key'       => 'showScaling',
+					'id'             => 'gpr-section-5',
+					'title'          => __( 'Scaling & Performance', 'gatherpress-relations' ),
+					'content_method' => 'render_scaling',
+				),
+				array(
+					'attr_key'       => 'showImplementation',
+					'id'             => 'gpr-section-6',
+					'title'          => __( 'Implementation Roadmap', 'gatherpress-relations' ),
+					'content_method' => 'render_implementation',
+				),
+			);
+
+			return array_values(
+				array_filter(
+					$all_sections,
+					function ( array $section ) use ( $attributes ): bool {
+						return ! empty( $attributes[ $section['attr_key'] ] );
+					}
+				)
+			);
+		}
+
+		/**
+		 * Renders the roadmap header with title and subtitle.
+		 *
+		 * @since  0.1.0
+		 * @return string Header HTML.
+		 */
+		private function render_header(): string {
+			ob_start();
+			?>
+			<header class="gatherpress-relations__header">
+				<h2 class="gatherpress-relations__main-title">
+					<?php esc_html_e( 'Shadow Taxonomy Relations Roadmap', 'gatherpress-relations' ); ?>
+				</h2>
+				<p class="gatherpress-relations__subtitle">
+					<?php esc_html_e( 'Architectural guide for connecting persons to productions (or any special post type) with roles in WordPress — powered by GatherPress shadow taxonomies, close to core, best editor experience, maximum flexibility, long-term scalability.', 'gatherpress-relations' ); ?>
+				</p>
+			</header>
+			<?php
+			return ob_get_clean();
+		}
+
+		/**
+		 * Renders the sticky table of contents sidebar.
+		 *
+		 * @since  0.1.0
+		 * @param  array<int, array{id: string, title: string}> $sections Enabled sections.
+		 * @return string TOC HTML.
+		 */
+		private function render_toc( array $sections ): string {
+			ob_start();
+			?>
+			<nav class="gatherpress-relations__toc" aria-label="<?php esc_attr_e( 'Roadmap table of contents', 'gatherpress-relations' ); ?>">
+				<h3 class="gatherpress-relations__toc-title">
+					<?php esc_html_e( 'Contents', 'gatherpress-relations' ); ?>
+				</h3>
+				<ul class="gatherpress-relations__toc-list">
+					<?php foreach ( $sections as $section ) : ?>
+						<li class="gatherpress-relations__toc-item">
+							<a class="gatherpress-relations__toc-link" href="#<?php echo esc_attr( $section['id'] ); ?>">
+								<?php echo esc_html( $section['title'] ); ?>
+							</a>
+						</li>
+					<?php endforeach; ?>
+				</ul>
+			</nav>
+			<?php
+			return ob_get_clean();
+		}
+
+		/**
+		 * Renders a single collapsible section.
+		 *
+		 * HOW collapsing works:
+		 * view.js toggles `--collapsed` on the section wrapper and
+		 * flips `aria-expanded` on the button. CSS handles the
+		 * max-height/opacity transition.
+		 *
+		 * WHY a <button> for the header?
+		 * Buttons are natively keyboard-focusable and activatable
+		 * with Enter/Space, making the section toggle fully accessible
+		 * without manual tabindex or keydown handling.
+		 *
+		 * @since  0.1.0
+		 * @param  array{id: string, title: string, content_method: string} $section Section data.
+		 * @param  int                                                       $number  1-based section index.
+		 * @return string Section HTML.
+		 */
+		private function render_section( array $section, int $number ): string {
+			$body_id = str_replace( 'section', 'body', $section['id'] );
+			$content = $this->{$section['content_method']}();
+
+			ob_start();
+			?>
+			<div class="gatherpress-relations__section" id="<?php echo esc_attr( $section['id'] ); ?>">
+				<button
+					class="gatherpress-relations__section-header"
+					aria-expanded="true"
+					aria-controls="<?php echo esc_attr( $body_id ); ?>"
+					type="button"
+				>
+					<span class="gatherpress-relations__section-number"><?php echo esc_html( (string) $number ); ?></span>
+					<h3 class="gatherpress-relations__section-title"><?php echo esc_html( $section['title'] ); ?></h3>
+					<span class="gatherpress-relations__section-chevron" aria-hidden="true">&#9662;</span>
+				</button>
+				<div class="gatherpress-relations__section-body" id="<?php echo esc_attr( $body_id ); ?>">
+					<?php
+					// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Content is escaped in individual render methods.
+					echo $content;
+					?>
+				</div>
+			</div>
+			<?php
+			return ob_get_clean();
+		}
+
+		/**
+		 * Section 1: Data Modeling & Architecture.
+		 *
+		 * CONTENT SUMMARY:
+		 * - Both people and productions are post types with shadow-source support
+		 * - Shadow taxonomies as the relationship primitive
+		 * - Roles as relationship metadata (post meta on the consumer)
+		 * - Agnostic pattern: works for any post type combination
+		 * - Comparison table: shadow taxonomy vs manual taxonomy vs users
+		 * - Schema diagrams showing the shadow taxonomy flow
+		 *
+		 * @since  0.1.0
+		 * @return string Section body HTML.
+		 */
+		private function render_data_modeling(): string {
+			ob_start();
+			?>
+			<h4 class="gatherpress-relations__heading"><?php esc_html_e( 'The Core Question', 'gatherpress-relations' ); ?></h4>
+			<p class="gatherpress-relations__paragraph">
+				<?php esc_html_e( 'How do you connect "persons" (actors, technicians, directors, speakers, organizers) to "special posts" (productions, events, sessions) with "roles" (Romeo, Light Technician, Keynote Speaker) — in a way that feels native to WordPress, provides the best editor experience, and scales for years?', 'gatherpress-relations' ); ?>
+			</p>
+
+			<div class="gatherpress-relations__callout gatherpress-relations__callout--key">
+				<p class="gatherpress-relations__callout-title"><?php esc_html_e( 'Fixed Architectural Decisions', 'gatherpress-relations' ); ?></p>
+				<p class="gatherpress-relations__callout-text">
+					<?php esc_html_e( 'People and productions are BOTH post types with gatherpress-shadow-source support. The production CPT (gatherpress_play) is provided by the gatherpress-productions plugin — we consume it, never register it. We register a new gatherpress_person post type. All new functionality (cast/crew assignments, ensemble features) is wrapped in the gatherpress-relations post_type_supports string — nothing is hard-bound to any post type slug. Discovery of supporting post types uses WP core\'s get_post_types_by_support( "gatherpress-relations" ). Consumer post types tag themselves with shadow taxonomy terms to model relationships. Roles are relationship metadata stored as structured post meta (_gatherpress_relations) on the consumer. Any post type can opt in by declaring the relevant support.', 'gatherpress-relations' ); ?>
+				</p>
+			</div>
+
+			<h4 class="gatherpress-relations__heading"><?php esc_html_e( 'What is gatherpress-shadow-source?', 'gatherpress-relations' ); ?></h4>
+			<p class="gatherpress-relations__paragraph">
+				<?php esc_html_e( 'The gatherpress-shadow-source post type support is a GatherPress primitive that creates a hidden taxonomy mirroring a post type. When a post type declares this support, the system:', 'gatherpress-relations' ); ?>
+			</p>
+			<ul class="gatherpress-relations__list">
+				<li><?php esc_html_e( 'Registers a hidden taxonomy _<post_type> with show_ui => false, show_admin_column => true, publicly_queryable => true, show_in_rest => true, and rewrite => false.', 'gatherpress-relations' ); ?></li>
+				<li><?php esc_html_e( 'On first publish, inserts a shadow term whose slug is the post slug prefixed with an underscore (e.g. jane-doe becomes _jane-doe).', 'gatherpress-relations' ); ?></li>
+				<li><?php esc_html_e( 'When the source post is renamed, the shadow term slug and name update automatically.', 'gatherpress-relations' ); ?></li>
+				<li><?php esc_html_e( 'When the source post is deleted, the shadow term is removed.', 'gatherpress-relations' ); ?></li>
+				<li><?php esc_html_e( 'The taxonomy appears in Query Loop block taxonomy controls (for filtering) but does not expose public archive URLs (rewrite => false).', 'gatherpress-relations' ); ?></li>
+			</ul>
+
+			<div class="gatherpress-relations__callout gatherpress-relations__callout--info">
+				<p class="gatherpress-relations__callout-title"><?php esc_html_e( 'Same Primitive, Different Domain', 'gatherpress-relations' ); ?></p>
+				<p class="gatherpress-relations__callout-text">
+					<?php esc_html_e( 'This is exactly how GatherPress models venue ↔ event relationships. The gatherpress_venue post type declares gatherpress-shadow-source, producing a _gatherpress_venue taxonomy. Events tag themselves with venue shadow terms. The pattern is domain-agnostic — swap "venue" for "gatherpress_person" or "gatherpress_play" and the wiring is identical.', 'gatherpress-relations' ); ?>
+				</p>
+			</div>
+
+			<h4 class="gatherpress-relations__heading"><?php esc_html_e( 'Why Both People and Productions Are Post Types', 'gatherpress-relations' ); ?></h4>
+			<p class="gatherpress-relations__paragraph">
+				<?php esc_html_e( 'People need rich profile data — biography, headshot, contact information, external links — that is best modeled with post_content, featured images, and the full block editor. Productions similarly need rich editorial content. Making both post types gives each:', 'gatherpress-relations' ); ?>
+			</p>
+			<ul class="gatherpress-relations__list">
+				<li><?php esc_html_e( 'Full block editor support for rich content (bios, descriptions, galleries).', 'gatherpress-relations' ); ?></li>
+				<li><?php esc_html_e( 'Featured images for headshots and production posters — native thumbnail support.', 'gatherpress-relations' ); ?></li>
+				<li><?php esc_html_e( 'Dedicated single templates (single-gatherpress_person.html, single-gatherpress_play.html) with full template hierarchy.', 'gatherpress-relations' ); ?></li>
+				<li><?php esc_html_e( 'REST API endpoints (/wp/v2/gatherpress_person, /wp/v2/gatherpress_play) for decoupled consumers.', 'gatherpress-relations' ); ?></li>
+				<li><?php esc_html_e( 'Shadow taxonomies auto-generated by gatherpress-shadow-source — enabling the same tagging + Query Loop filtering that GatherPress uses for venues.', 'gatherpress-relations' ); ?></li>
+				<li><?php esc_html_e( 'Archive pages and pagination handled by WordPress core.', 'gatherpress-relations' ); ?></li>
+			</ul>
+
+			<h4 class="gatherpress-relations__heading"><?php esc_html_e( 'How Relationships Are Wired', 'gatherpress-relations' ); ?></h4>
+			<p class="gatherpress-relations__paragraph">
+				<?php esc_html_e( 'The relationship wiring is driven entirely by post_type_supports. Our plugin defines a gatherpress-relations support string. On init:100 (after all CPTs are registered), it uses WP core\'s get_post_types_by_support( "gatherpress-relations" ) to discover every consumer and dynamically wires the _gatherpress_person shadow taxonomy onto each — no post type slug is hard-coded in the wiring layer.', 'gatherpress-relations' ); ?>
+			</p>
+			<div class="gatherpress-relations__code-block">
+				<code class="gatherpress-relations__code">// STEP 1: Register the "gatherpress_person" post type (the ONLY CPT we register).
+// The gatherpress_play CPT comes from gatherpress-productions — we never register it.
+register_post_type( 'gatherpress_person', [
+    'label'    =&gt; __( 'People', 'gatherpress-relations' ),
+    'public'   =&gt; true,
+    'supports' =&gt; [ 'title', 'editor', 'thumbnail', 'custom-fields', 'gatherpress-shadow-source' ],
+    'show_in_rest' =&gt; true,
+    'has_archive'  =&gt; true,
+    'rewrite'      =&gt; [ 'slug' =&gt; 'person' ],
+] );
+
+// STEP 2: Bridge external CPTs into our system.
+// The gatherpress_play CPT is owned by gatherpress-productions — we add our
+// support flag to it, not the other way around.
+add_action( 'init', function (): void {
+    if ( post_type_exists( 'gatherpress_play' ) ) {
+        add_post_type_support( 'gatherpress_play', 'gatherpress-relations' );
+    }
+    // Any other external CPT can be bridged the same way:
+    // if ( post_type_exists( 'gatherpress_event' ) ) {
+    //     add_post_type_support( 'gatherpress_event', 'gatherpress-relations' );
+    // }
+}, 15 );
+
+// STEP 3: Dynamic wiring — use get_post_types_by_support() from WP core.
+// No post type slug appears in this callback.
+add_action( 'init', function (): void {
+    // get_post_types_by_support() returns an array of post type names
+    // that declare the given support string. This is a core function
+    // (since WP 4.7) that reads from the global $wp_post_types registry.
+    $consumers = get_post_types_by_support( 'gatherpress-relations' );
+
+    foreach ( $consumers as $pt ) {
+        // Register junction meta per consumer.
+        register_post_meta( $pt, '_gatherpress_relations', [
+            'type'          =&gt; 'string',
+            'single'        =&gt; true,
+            'show_in_rest'  =&gt; true,
+            'description'   =&gt; 'JSON array of person-role assignments.',
+            'auth_callback' =&gt; function (): bool {
+                return current_user_can( 'edit_posts' );
+            },
+        ] );
+    }
+
+    if ( ! empty( $consumers ) ) {
+        add_filter(
+            'gatherpress_shadow_taxonomy_object_types',
+            function ( array $types, string $source ) use ( $consumers ): array {
+                if ( 'gatherpress_person' === $source ) {
+                    $types = array_merge( $types, $consumers );
+                }
+                return array_unique( $types );
+            },
+            10,
+            2
+        );
+    }
+}, 100 ); // Priority 100: safely after ALL CPTs are registered.
+
+// The _gatherpress_play shadow taxonomy wiring onto events is handled by
+// gatherpress-productions itself — not our responsibility.</code>
+			</div>
+
+			<h4 class="gatherpress-relations__heading"><?php esc_html_e( 'The Role Problem: Relationship Metadata', 'gatherpress-relations' ); ?></h4>
+			<p class="gatherpress-relations__paragraph">
+				<?php esc_html_e( 'Shadow taxonomy terms give you person ↔ production connections (via the _gatherpress_person taxonomy on the production post), but they do not natively store metadata about the connection itself — the "role". A person is not always "Romeo"; they are Romeo in Production X but the Light Technician in Production Y. Roles are contextual to a specific relationship, not to a person or a production.', 'gatherpress-relations' ); ?>
+			</p>
+			<p class="gatherpress-relations__paragraph">
+				<?php esc_html_e( 'The solution: store roles as structured post meta on the consumer post (the production, event, etc.), keyed by the shadow term. This is the same "junction metadata" pattern used across WordPress — the taxonomy handles the many-to-many join, and post meta carries per-link attributes.', 'gatherpress-relations' ); ?>
+			</p>
+
+			<h4 class="gatherpress-relations__heading"><?php esc_html_e( 'Schema: Post Meta as Junction Metadata', 'gatherpress-relations' ); ?></h4>
+			<div class="gatherpress-relations__code-block">
+				<code class="gatherpress-relations__code">// Post meta key: _gatherpress_relations
+// Stored on: gatherpress_play post (or any consumer with gatherpress-relations support)
+// Value: JSON array of person-role assignments
+//
+// Each entry references a person by their shadow term slug
+// (the underscore-prefixed post_name from the _gatherpress_person taxonomy).
+//
+// PAYLOAD EXAMPLE:
+// post_id: 42 (gatherpress_play: "Hamlet")
+// meta_key: "_gatherpress_relations"
+// meta_value:
+[
+  {
+    "person_shadow_slug": "_jane-doe",
+    "person_post_id": 15,
+    "role": "Hamlet",
+    "department": "cast",
+    "billing_order": 1
+  },
+  {
+    "person_shadow_slug": "_alex-rivera",
+    "person_post_id": 23,
+    "role": "Ophelia",
+    "department": "cast",
+    "billing_order": 2
+  },
+  {
+    "person_shadow_slug": "_sam-chen",
+    "person_post_id": 8,
+    "role": "Director",
+    "department": "direction",
+    "billing_order": 1
+  },
+  {
+    "person_shadow_slug": "_taylor-wright",
+    "person_post_id": 31,
+    "role": "Lighting Designer",
+    "department": "design",
+    "billing_order": 1
+  }
+]
+
+// WHY both shadow_slug and post_id?
+// The shadow_slug is the canonical link (it survives re-imports),
+// and the post_id is a fast denormalized lookup for rendering.
+// If the person post is renamed, the shadow term slug updates
+// automatically — a scheduled reconciliation job or a
+// save_post hook can refresh the meta entries.</code>
+			</div>
+
+			<h4 class="gatherpress-relations__heading"><?php esc_html_e( 'Registration Code for Junction Meta', 'gatherpress-relations' ); ?></h4>
+			<div class="gatherpress-relations__code-block">
+				<code class="gatherpress-relations__code">// Junction meta is registered DYNAMICALLY for every post type that
+// declares the 'gatherpress-relations' support.
+// This happens in the init:100 callback (see "How Relationships Are Wired").
+//
+// No post type slug is hard-coded — the same meta key (_gatherpress_relations)
+// is registered on every supporting post type discovered via
+// get_post_types_by_support( 'gatherpress-relations' ):
+//
+//   $consumers = get_post_types_by_support( 'gatherpress-relations' );
+//   foreach ( $consumers as $pt ) {
+//       register_post_meta( $pt, '_gatherpress_relations', [
+//           'type'          =&gt; 'string',   // JSON-encoded array
+//           'single'        =&gt; true,
+//           'show_in_rest'  =&gt; true,
+//           'description'   =&gt; 'JSON array of {person_shadow_slug, person_post_id, role, department, billing_order}.',
+//           'auth_callback' =&gt; function (): bool {
+//               return current_user_can( 'edit_posts' );
+//           },
+//       ] );
+//   }
+//
+// If a conference plugin adds:
+//   add_post_type_support( 'session', 'gatherpress-relations' );
+// then 'session' posts automatically get _gatherpress_relations meta, the
+// _gatherpress_person shadow taxonomy wired onto them, and the Cast &amp; Crew
+// block works on session pages — zero changes in our plugin code.</code>
+			</div>
+
+			<h4 class="gatherpress-relations__heading"><?php esc_html_e( 'Relationship Diagram', 'gatherpress-relations' ); ?></h4>
+			<div class="gatherpress-relations__diagram">
+				<span class="gatherpress-relations__diagram-content">┌────────────────────────────────┐      ┌────────────────────────────────┐
+│  gatherpress_person (CPT)      │      │  gatherpress_play (CPT)        │
+│  supports: shadow-source       │      │  supports: shadow-source       │
+│                                │      │  (from gatherpress-productions)│
+│  post_id: 15                   │      │  post_id: 42                   │
+│  post_name: jane-doe           │      │  post_name: hamlet             │
+│  post_title: Jane Doe          │      │  post_title: Hamlet            │
+└──────────┬─────────────────────┘      └──────────┬─────────────────────┘
+           │                                       │
+    auto-generates                          auto-generates
+           │                                       │
+           ▼                                       ▼
+┌────────────────────────────────┐      ┌────────────────────────────────┐
+│  _gatherpress_person           │      │  _gatherpress_play             │
+│  (shadow taxonomy)             │      │  (shadow taxonomy)             │
+│  hidden, show_in_rest          │      │  hidden, show_in_rest          │
+│                                │      │                                │
+│  term: _jane-doe               │      │  term: _hamlet                 │
+│  term: _alex-rivera            │      │  term: _tempest                │
+│  term: _sam-chen               │      │  term: _midsummer              │
+└──────────┬─────────────────────┘      └──────────┬─────────────────────┘
+           │                                       │
+   wired onto via filter                    wired onto via filter
+           │                                       │
+           ▼                                       ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│  gatherpress_play (CPT)           │  gatherpress_event (CPT)         │
+│                                   │                                  │
+│  Tagged with _gatherpress_person: │  Tagged with _gatherpress_person:│
+│    _jane-doe, _sam-chen           │    _jane-doe                     │
+│                                   │  Tagged with _gatherpress_play:  │
+│  post_meta: _gatherpress_relations│    _hamlet                       │
+│  [{                               │                                  │
+│    person_shadow_slug:            │  post_meta: _gatherpress_relations│
+│      "_jane-doe",                 │  [{                              │
+│    role: "Hamlet",                │    person_shadow_slug:            │
+│    department: "cast"             │      "_jane-doe",                │
+│  }]                               │    role: "Host"                  │
+│                                   │  }]                              │
+└───────────────────────────────────┴──────────────────────────────────┘</span>
+				<span class="gatherpress-relations__diagram-caption"><?php esc_html_e( 'Fig 1: Both people (gatherpress_person) and productions (gatherpress_play) are post types with shadow-source support. Shadow taxonomy terms wire them onto consumer post types. Role metadata lives as _gatherpress_relations post meta on the consumer.', 'gatherpress-relations' ); ?></span>
+			</div>
+
+			<h4 class="gatherpress-relations__heading"><?php esc_html_e( 'Comparison: Shadow Taxonomy vs Manual Taxonomy vs Users', 'gatherpress-relations' ); ?></h4>
+			<div class="gatherpress-relations__table-wrap">
+				<table class="gatherpress-relations__table">
+					<thead>
+						<tr>
+							<th><?php esc_html_e( 'Criterion', 'gatherpress-relations' ); ?></th>
+							<th><?php esc_html_e( 'Shadow Taxonomy (post type + gatherpress-shadow-source)', 'gatherpress-relations' ); ?></th>
+							<th><?php esc_html_e( 'Manual Taxonomy (register_taxonomy)', 'gatherpress-relations' ); ?></th>
+							<th><?php esc_html_e( 'WP Users', 'gatherpress-relations' ); ?></th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td><?php esc_html_e( 'Rich profile data (bio, photo, editor)', 'gatherpress-relations' ); ?></td>
+							<td><?php esc_html_e( '✅ Full post editor + featured image', 'gatherpress-relations' ); ?></td>
+							<td><?php esc_html_e( '⚠️ Term meta + custom fields only', 'gatherpress-relations' ); ?></td>
+							<td><?php esc_html_e( '⚠️ User meta only', 'gatherpress-relations' ); ?></td>
+						</tr>
+						<tr>
+							<td><?php esc_html_e( 'Many-to-many with other post types', 'gatherpress-relations' ); ?></td>
+							<td><?php esc_html_e( '✅ Via shadow taxonomy terms', 'gatherpress-relations' ); ?></td>
+							<td><?php esc_html_e( '✅ Native term ↔ post', 'gatherpress-relations' ); ?></td>
+							<td><?php esc_html_e( '❌ Needs custom meta', 'gatherpress-relations' ); ?></td>
+						</tr>
+						<tr>
+							<td><?php esc_html_e( 'Automatic lifecycle sync', 'gatherpress-relations' ); ?></td>
+							<td><?php esc_html_e( '✅ Term created/renamed/deleted with post', 'gatherpress-relations' ); ?></td>
+							<td><?php esc_html_e( '❌ Manual management', 'gatherpress-relations' ); ?></td>
+							<td><?php esc_html_e( '❌ N/A', 'gatherpress-relations' ); ?></td>
+						</tr>
+						<tr>
+							<td><?php esc_html_e( 'Block editor sidebar panel on consumer', 'gatherpress-relations' ); ?></td>
+							<td><?php esc_html_e( '✅ Automatic (show_in_rest + taxonomy panel)', 'gatherpress-relations' ); ?></td>
+							<td><?php esc_html_e( '✅ Automatic', 'gatherpress-relations' ); ?></td>
+							<td><?php esc_html_e( '❌ No native panel', 'gatherpress-relations' ); ?></td>
+						</tr>
+						<tr>
+							<td><?php esc_html_e( 'Query Loop filtering', 'gatherpress-relations' ); ?></td>
+							<td><?php esc_html_e( '✅ Appears in taxonomy controls', 'gatherpress-relations' ); ?></td>
+							<td><?php esc_html_e( '✅ Native', 'gatherpress-relations' ); ?></td>
+							<td><?php esc_html_e( '❌ Custom query needed', 'gatherpress-relations' ); ?></td>
+						</tr>
+						<tr>
+							<td><?php esc_html_e( 'Dedicated single pages', 'gatherpress-relations' ); ?></td>
+							<td><?php esc_html_e( '✅ Full template hierarchy (single-gatherpress_person.html)', 'gatherpress-relations' ); ?></td>
+							<td><?php esc_html_e( '⚠️ Term archive only', 'gatherpress-relations' ); ?></td>
+							<td><?php esc_html_e( '⚠️ Author archive only', 'gatherpress-relations' ); ?></td>
+						</tr>
+						<tr>
+							<td><?php esc_html_e( 'Cross-post-type reuse', 'gatherpress-relations' ); ?></td>
+							<td><?php esc_html_e( '✅ Wire via gatherpress_shadow_taxonomy_object_types filter', 'gatherpress-relations' ); ?></td>
+							<td><?php esc_html_e( '⚠️ register_taxonomy_for_object_type', 'gatherpress-relations' ); ?></td>
+							<td><?php esc_html_e( '❌ Manual per post type', 'gatherpress-relations' ); ?></td>
+						</tr>
+						<tr>
+							<td><?php esc_html_e( 'Login/auth capabilities', 'gatherpress-relations' ); ?></td>
+							<td><?php esc_html_e( '❌ N/A (not real users)', 'gatherpress-relations' ); ?></td>
+							<td><?php esc_html_e( '❌ N/A', 'gatherpress-relations' ); ?></td>
+							<td><?php esc_html_e( '✅ Native auth', 'gatherpress-relations' ); ?></td>
+						</tr>
+						<tr>
+							<td><?php esc_html_e( 'Reuse with gatherpress/venue block', 'gatherpress-relations' ); ?></td>
+							<td><?php esc_html_e( '✅ Set sourcePostType attribute', 'gatherpress-relations' ); ?></td>
+							<td><?php esc_html_e( '❌ Not compatible', 'gatherpress-relations' ); ?></td>
+							<td><?php esc_html_e( '❌ Not compatible', 'gatherpress-relations' ); ?></td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
+
+			<div class="gatherpress-relations__callout gatherpress-relations__callout--tip">
+				<p class="gatherpress-relations__callout-title"><?php esc_html_e( 'Agnostic by Design', 'gatherpress-relations' ); ?></p>
+				<p class="gatherpress-relations__callout-text">
+					<?php esc_html_e( 'This pattern is not theater-specific. Replace "gatherpress_person" with "sponsor", "speaker", or "vendor" — the same gatherpress-shadow-source support on the person post type applies. Any consumer post type (gatherpress_play, gatherpress_event, session, conference) opts in by declaring gatherpress-relations support. The wiring layer discovers it automatically via get_post_types_by_support(). No code changes needed.', 'gatherpress-relations' ); ?>
+				</p>
+			</div>
+
+			<div class="gatherpress-relations__callout gatherpress-relations__callout--warning">
+				<p class="gatherpress-relations__callout-title"><?php esc_html_e( 'Why not a separate "role" taxonomy?', 'gatherpress-relations' ); ?></p>
+				<p class="gatherpress-relations__callout-text">
+					<?php esc_html_e( 'Roles like "Romeo" or "Light Tech" are contextual to a specific relationship — they are not reusable categories. A separate taxonomy would create orphaned terms for every unique role ever assigned. Instead, roles live as metadata on the person ↔ consumer relationship, stored as post meta (_gatherpress_relations) on whichever post type declares gatherpress-relations support.', 'gatherpress-relations' ); ?>
+				</p>
+			</div>
+
+			<h4 class="gatherpress-relations__heading"><?php esc_html_e( 'Leveraging the gatherpress/venue Block', 'gatherpress-relations' ); ?></h4>
+			<p class="gatherpress-relations__paragraph">
+				<?php esc_html_e( 'The gatherpress/venue block accepts a sourcePostType attribute (default gatherpress_venue). Set it to your shadow-source CPT and the block resolves its connected source post via your taxonomy — same block, same inner blocks (post-title, venue-detail, etc.), different source. This gives you a person-detail or production-detail surface on any event template for free:', 'gatherpress-relations' ); ?>
+			</p>
+			<div class="gatherpress-relations__code-block">
+				<code class="gatherpress-relations__code">&lt;!-- Show the connected person's details on an event template --&gt;
+&lt;!-- wp:gatherpress/venue {"sourcePostType":"gatherpress_person"} --&gt;
+  &lt;!-- wp:post-title /--&gt;
+  &lt;!-- wp:post-featured-image /--&gt;
+  &lt;!-- wp:post-content /--&gt;
+&lt;!-- /wp:gatherpress/venue --&gt;
+
+&lt;!-- Show the connected production's details on an event template --&gt;
+&lt;!-- wp:gatherpress/venue {"sourcePostType":"gatherpress_play"} --&gt;
+  &lt;!-- wp:post-title /--&gt;
+&lt;!-- /wp:gatherpress/venue --&gt;</code>
+			</div>
+
+			<h4 class="gatherpress-relations__heading"><?php esc_html_e( 'JavaScript: Discovering Post Types via Core Data Store', 'gatherpress-relations' ); ?></h4>
+			<p class="gatherpress-relations__paragraph">
+				<?php esc_html_e( 'In the editor, use the @wordpress/core-data store to dynamically discover post types and their supports. This ensures the block\'s UI adapts to the runtime environment without hard-coding any post type slug:', 'gatherpress-relations' ); ?>
+			</p>
+			<div class="gatherpress-relations__code-block">
+				<code class="gatherpress-relations__code">import { useSelect } from '@wordpress/data';
+import { store as coreStore } from '@wordpress/core-data';
+
+/**
+ * Hook that returns all post types supporting 'gatherpress-relations'.
+ *
+ * HOW this works:
+ * ───────────────
+ * The @wordpress/core-data store exposes getPostTypes() which fetches
+ * post type objects from the REST API (/wp/v2/types). Each object
+ * includes a `supports` property. We filter client-side to find all
+ * post types that declare 'gatherpress-relations' support.
+ *
+ * WHY the core data store instead of a custom endpoint?
+ * - Zero new REST routes needed.
+ * - The data is already cached by the store across components.
+ * - Stays in sync with the server's post type registry automatically.
+ *
+ * @returns {{ consumerTypes: Object[]|null, isResolving: boolean }}
+ *
+ * PAYLOAD example (consumerTypes):
+ * [
+ *   { slug: 'gatherpress_play', name: 'Productions', supports: { ... } },
+ *   { slug: 'gatherpress_event', name: 'Events', supports: { ... } },
+ * ]
+ */
+function useRelationConsumerTypes() {
+    return useSelect( ( select ) =&gt; {
+        const { getPostTypes, isResolving } = select( coreStore );
+        const allTypes = getPostTypes( { per_page: -1 } );
+
+        if ( ! allTypes ) {
+            return { consumerTypes: null, isResolving: true };
+        }
+
+        // Filter for post types with gatherpress-relations support.
+        // The REST API exposes supports as an object with boolean values.
+        const consumers = allTypes.filter(
+            ( type ) =&gt; type.supports?.[ 'gatherpress-relations' ]
+        );
+
+        return {
+            consumerTypes: consumers,
+            isResolving: isResolving( 'getPostTypes', [{ per_page: -1 }] ),
+        };
+    }, [] );
+}</code>
+			</div>
+			<?php
+			return ob_get_clean();
+		}
+
+		/**
+		 * Section 2: Cast & Crew List Block.
+		 *
+		 * CONTENT SUMMARY:
+		 * - Block concept: linked roster showing person → role
+		 * - Reading shadow taxonomy terms + junction meta
+		 * - Grouping by department (Cast, Direction, Design, Stage Management)
+		 * - Block JSON + PHP render pattern
+		 * - Editor experience using the shadow taxonomy panel + custom sidebar
+		 *
+		 * @since  0.1.0
+		 * @return string Section body HTML.
+		 */
+		private function render_cast_crew(): string {
+			ob_start();
+			?>
+			<p class="gatherpress-relations__paragraph">
+				<?php esc_html_e( 'The Cast & Crew List block is the primary interface for viewing the person ↔ production ↔ role relationships. It renders a grouped roster on the production page by reading the _gatherpress_person shadow taxonomy terms assigned to the production and enriching them with role metadata from the _gatherpress_relations post meta.', 'gatherpress-relations' ); ?>
+			</p>
+
+			<h4 class="gatherpress-relations__heading"><?php esc_html_e( 'Block Architecture', 'gatherpress-relations' ); ?></h4>
+			<div class="gatherpress-relations__callout gatherpress-relations__callout--info">
+				<p class="gatherpress-relations__callout-title"><?php esc_html_e( 'Dynamic Block', 'gatherpress-relations' ); ?></p>
+				<p class="gatherpress-relations__callout-text">
+					<?php esc_html_e( 'This must be a dynamic block (render.php) because it reads _gatherpress_relations post meta and resolves person post data at render time. If a person\'s name, headshot, or bio changes, the block output updates automatically without re-saving the production.', 'gatherpress-relations' ); ?>
+				</p>
+			</div>
+
+			<h4 class="gatherpress-relations__heading"><?php esc_html_e( 'How the Data Flows', 'gatherpress-relations' ); ?></h4>
+			<p class="gatherpress-relations__paragraph">
+				<?php esc_html_e( 'The block combines two data sources on the consumer post:', 'gatherpress-relations' ); ?>
+			</p>
+			<ul class="gatherpress-relations__list">
+				<li><strong><?php esc_html_e( 'Shadow taxonomy terms', 'gatherpress-relations' ); ?></strong> — <?php esc_html_e( 'The _gatherpress_person shadow taxonomy terms assigned to this post via the editor\'s taxonomy panel (or the gatherpress_shadow_taxonomy_object_types wiring). These tell you WHICH persons are connected.', 'gatherpress-relations' ); ?></li>
+				<li><strong><?php esc_html_e( 'Junction meta (_gatherpress_relations)', 'gatherpress-relations' ); ?></strong> — <?php esc_html_e( 'A JSON array stored as post meta on the consumer. Each entry references a person by their shadow term slug and adds the role, department, and billing order. This tells you HOW each person is connected.', 'gatherpress-relations' ); ?></li>
+			</ul>
+
+			<h4 class="gatherpress-relations__heading"><?php esc_html_e( 'Frontend Output Structure', 'gatherpress-relations' ); ?></h4>
+			<div class="gatherpress-relations__code-block">
+				<code class="gatherpress-relations__code">&lt;div class="wp-block-gatherpress-cast-crew"&gt;
+  &lt;section class="cast-crew__department"&gt;
+    &lt;h3 class="cast-crew__department-title"&gt;Cast&lt;/h3&gt;
+    &lt;div class="cast-crew__grid"&gt;
+      &lt;a href="/person/jane-doe/" class="cast-crew__card"&gt;
+        &lt;img class="cast-crew__headshot"
+             src="..."
+             alt="Jane Doe" /&gt;
+        &lt;span class="cast-crew__name"&gt;Jane Doe&lt;/span&gt;
+        &lt;span class="cast-crew__role"&gt;Hamlet&lt;/span&gt;
+      &lt;/a&gt;
+    &lt;/div&gt;
+  &lt;/section&gt;
+  &lt;section class="cast-crew__department"&gt;
+    &lt;h3&gt;Direction&lt;/h3&gt;
+  &lt;/section&gt;
+&lt;/div&gt;</code>
+			</div>
+
+			<h4 class="gatherpress-relations__heading"><?php esc_html_e( 'Render Logic (Simplified)', 'gatherpress-relations' ); ?></h4>
+			<div class="gatherpress-relations__code-block">
+				<code class="gatherpress-relations__code">// In render.php of the cast-crew block:
+$post_id   = get_the_ID();
+$relations = json_decode(
+    get_post_meta( $post_id, '_gatherpress_relations', true ) ?: '[]',
+    true
+);
+
+// Group by department.
+$departments = [];
+foreach ( $relations as $entry ) {
+    $dept = $entry['department'] ?? 'other';
+    $departments[ $dept ][] = $entry;
+}
+
+// Sort each department by billing_order.
+foreach ( $departments as &amp;$members ) {
+    usort(
+        $members,
+        fn( $a, $b ) =&gt; ( $a['billing_order'] ?? 99 ) &lt;=&gt; ( $b['billing_order'] ?? 99 )
+    );
+}
+
+// Render each department section...
+foreach ( $departments as $dept_name =&gt; $members ) {
+    echo '&lt;section class="cast-crew__department"&gt;';
+    echo '&lt;h3&gt;' . esc_html( ucfirst( $dept_name ) ) . '&lt;/h3&gt;';
+    foreach ( $members as $member ) {
+        // Resolve the source person post from the shadow term slug.
+        // Shadow term slugs are prefixed with underscore:
+        // "_jane-doe" maps to gatherpress_person post with post_name "jane-doe".
+        $person_post_id = $member['person_post_id'];
+        $person_post    = get_post( $person_post_id );
+        $headshot       = get_the_post_thumbnail_url( $person_post_id, 'medium' );
+        $permalink      = get_permalink( $person_post_id );
+        // ... render card with link to person single page
+    }
+    echo '&lt;/section&gt;';
+}</code>
+			</div>
+
+			<h4 class="gatherpress-relations__heading"><?php esc_html_e( 'Editor Experience', 'gatherpress-relations' ); ?></h4>
+			<p class="gatherpress-relations__paragraph">
+				<?php esc_html_e( 'In the editor, the block reads the current post\'s _gatherpress_relations meta via useEntityProp and renders a live preview of the grouped roster. The shadow taxonomy panel (_gatherpress_person) already appears in the post sidebar — editors can add/remove person tags there. A custom InspectorControls panel in the block provides:', 'gatherpress-relations' ); ?>
+			</p>
+			<ul class="gatherpress-relations__list">
+				<li><strong><?php esc_html_e( 'Person selector', 'gatherpress-relations' ); ?></strong> — <?php esc_html_e( 'ComboboxControl searching person posts via REST (/wp/v2/gatherpress_person?search=...), then resolving their shadow term slug.', 'gatherpress-relations' ); ?></li>
+				<li><strong><?php esc_html_e( 'Role input', 'gatherpress-relations' ); ?></strong> — <?php esc_html_e( 'TextControl for the role name (free text — roles are unique per production).', 'gatherpress-relations' ); ?></li>
+				<li><strong><?php esc_html_e( 'Department dropdown', 'gatherpress-relations' ); ?></strong> — <?php esc_html_e( 'SelectControl with options: Cast, Direction, Design, Stage Management, Other.', 'gatherpress-relations' ); ?></li>
+				<li><strong><?php esc_html_e( 'Billing order', 'gatherpress-relations' ); ?></strong> — <?php esc_html_e( 'NumberControl or drag-and-drop reordering within each department.', 'gatherpress-relations' ); ?></li>
+				<li><strong><?php esc_html_e( 'Add / Remove', 'gatherpress-relations' ); ?></strong> — <?php esc_html_e( 'Buttons to add a new person-role entry or remove an existing one.', 'gatherpress-relations' ); ?></li>
+			</ul>
+
+			<div class="gatherpress-relations__callout gatherpress-relations__callout--tip">
+				<p class="gatherpress-relations__callout-title"><?php esc_html_e( 'Pro Tip: useEntityProp + Core Data Store', 'gatherpress-relations' ); ?></p>
+				<p class="gatherpress-relations__callout-text">
+					<?php esc_html_e( 'Use useEntityProp( "postType", currentPostType, "meta._gatherpress_relations" ) to read and write the junction meta directly from the block. The currentPostType is resolved dynamically from the core data store — the block never hard-codes "gatherpress_play". When the editor adds a person-role entry via the block\'s sidebar, the block also programmatically adds the corresponding _gatherpress_person shadow term to the post\'s taxonomy terms — keeping the two data sources in sync. Changes are saved when the user clicks "Update".', 'gatherpress-relations' ); ?>
+				</p>
+			</div>
+
+			<h4 class="gatherpress-relations__heading"><?php esc_html_e( 'Department Configuration', 'gatherpress-relations' ); ?></h4>
+			<div class="gatherpress-relations__code-block">
+				<code class="gatherpress-relations__code">// Departments and their display order.
+// Filterable so themes/plugins can customise for their domain.
+// A theater plugin might add "Musicians"; a conference plugin
+// might replace the whole list with "Speakers", "Moderators", "Staff".
+$departments_config = apply_filters( 'gatherpress_relations_departments', [
+    'cast'             =&gt; __( 'Cast',             'gatherpress-relations' ),
+    'direction'        =&gt; __( 'Direction',         'gatherpress-relations' ),
+    'design'           =&gt; __( 'Design',            'gatherpress-relations' ),
+    'stage_management' =&gt; __( 'Stage Management',  'gatherpress-relations' ),
+    'musicians'        =&gt; __( 'Musicians',         'gatherpress-relations' ),
+    'production'       =&gt; __( 'Production',        'gatherpress-relations' ),
+    'other'            =&gt; __( 'Other',             'gatherpress-relations' ),
+] );</code>
+			</div>
+			<?php
+			return ob_get_clean();
+		}
+
+		/**
+		 * Section 3: People / Ensemble Blocks.
+		 *
+		 * CONTENT SUMMARY:
+		 * - Person Profile Card block (reads person post data + cross-queries productions)
+		 * - Ensemble Grid block with filters
+		 * - Person Production Timeline block
+		 * - Query patterns using shadow taxonomy for reverse lookups
+		 *
+		 * @since  0.1.0
+		 * @return string Section body HTML.
+		 */
+		private function render_ensemble(): string {
+			ob_start();
+			?>
+			<p class="gatherpress-relations__paragraph">
+				<?php esc_html_e( 'These blocks render person-centric views — profile cards, filterable grids, and production timelines. Because persons are full post types (gatherpress_person), each person has rich content (block editor bio, featured image headshot, custom fields) and a dedicated single template. The blocks query across post types using the shadow taxonomy as the join.', 'gatherpress-relations' ); ?>
+			</p>
+
+			<h4 class="gatherpress-relations__heading"><?php esc_html_e( '2.1 Person Profile Card', 'gatherpress-relations' ); ?></h4>
+			<p class="gatherpress-relations__paragraph">
+				<?php esc_html_e( 'A single-person block that renders a headshot (featured image), name, bio excerpt (post_excerpt or truncated post_content), and a list of recent roles. Placed on single person templates or embedded anywhere via the editor.', 'gatherpress-relations' ); ?>
+			</p>
+			<div class="gatherpress-relations__code-block">
+				<code class="gatherpress-relations__code">// block.json attributes for Person Profile Card:
+{
+  "attributes": {
+    "personPostId": {
+      "type": "number",
+      "default": 0
+    },
+    "showRolesHistory": {
+      "type": "boolean",
+      "default": true
+    },
+    "maxRoles": {
+      "type": "number",
+      "default": 5
+    }
+  }
+}
+
+// Render logic pseudocode:
+//
+// 1. Get person post: get_post( $personPostId )
+// 2. Get headshot: get_the_post_thumbnail_url( $personPostId )
+// 3. Get bio: get_the_excerpt( $personPostId ) or wp_trim_words()
+//
+// 4. Find productions featuring this person using the shadow taxonomy.
+//    The person post "jane-doe" has a shadow term "_jane-doe" in
+//    the _gatherpress_person taxonomy. Query consumer posts tagged
+//    with that term:
+//
+//    $shadow_slug = '_' . get_post_field( 'post_name', $personPostId );
+//    $shadow_term = get_term_by( 'slug', $shadow_slug, '_gatherpress_person' );
+//
+//    // Query ALL post types that support gatherpress-relations.
+//    $consumer_types = get_post_types_by_support( 'gatherpress-relations' );
+//
+//    $productions = get_posts( [
+//        'post_type'      =&gt; $consumer_types,
+//        'posts_per_page' =&gt; $maxRoles,
+//        'tax_query'      =&gt; [
+//            [
+//                'taxonomy' =&gt; '_gatherpress_person',
+//                'terms'    =&gt; $shadow_term-&gt;term_id,
+//            ],
+//        ],
+//        'orderby' =&gt; 'date',
+//        'order'   =&gt; 'DESC',
+//    ] );
+//
+// 5. For each result, extract the role from _gatherpress_relations meta:
+//    $cast = json_decode( get_post_meta( $prod-&gt;ID, '_gatherpress_relations', true ), true );
+//    $entry = array_filter( $cast, fn( $e ) =&gt; $e['person_shadow_slug'] === $shadow_slug );
+//
+// 6. Render card HTML.</code>
+			</div>
+
+			<div class="gatherpress-relations__callout gatherpress-relations__callout--tip">
+				<p class="gatherpress-relations__callout-title"><?php esc_html_e( 'Shadow Taxonomy Query = Core-Optimised', 'gatherpress-relations' ); ?></p>
+				<p class="gatherpress-relations__callout-text">
+					<?php esc_html_e( 'The tax_query above uses WordPress core\'s optimised term_relationships JOIN. No LIKE on JSON, no custom table. The shadow taxonomy gives you the same query performance as any native taxonomy — O(1) index lookup on the term_taxonomy_id.', 'gatherpress-relations' ); ?>
+				</p>
+			</div>
+
+			<h4 class="gatherpress-relations__heading"><?php esc_html_e( '2.2 Ensemble Grid', 'gatherpress-relations' ); ?></h4>
+			<p class="gatherpress-relations__paragraph">
+				<?php esc_html_e( 'A filterable grid of all persons (gatherpress_person post type). Since persons are full posts, the grid can use WP_Query with standard arguments. Filters include:', 'gatherpress-relations' ); ?>
+			</p>
+			<ul class="gatherpress-relations__list">
+				<li><strong><?php esc_html_e( 'Season / year', 'gatherpress-relations' ); ?></strong> — <?php esc_html_e( 'Filter by persons who appear in productions from a given season (cross-query via the _gatherpress_person shadow taxonomy).', 'gatherpress-relations' ); ?></li>
+				<li><strong><?php esc_html_e( 'Department', 'gatherpress-relations' ); ?></strong> — <?php esc_html_e( 'Show only cast, or only crew, or all (requires querying _gatherpress_relations meta across productions).', 'gatherpress-relations' ); ?></li>
+				<li><strong><?php esc_html_e( 'Status', 'gatherpress-relations' ); ?></strong> — <?php esc_html_e( 'Current ensemble, alumni, guest artists (stored as post meta on the person post).', 'gatherpress-relations' ); ?></li>
+			</ul>
+			<div class="gatherpress-relations__code-block">
+				<code class="gatherpress-relations__code">// Ensemble Grid: query all gatherpress_person posts.
+$persons = new WP_Query( [
+    'post_type'      =&gt; 'gatherpress_person',
+    'posts_per_page' =&gt; 50,
+    'orderby'        =&gt; 'title',
+    'order'          =&gt; 'ASC',
+    'meta_query'     =&gt; [
+        [ 'key' =&gt; 'ensemble_status', 'value' =&gt; 'current' ],
+    ],
+] );
+
+// WHY full posts instead of taxonomy terms?
+// Each person has a featured image (headshot), post_content (bio),
+// and custom fields — all natively available in the loop.
+// No term_meta gymnastics needed.
+
+// Frontend filtering via view.js:
+// - Render all cards with data-department and data-season attributes
+// - JavaScript filters by toggling the hidden attribute
+// - No additional server requests needed for client-side filtering</code>
+			</div>
+
+			<h4 class="gatherpress-relations__heading"><?php esc_html_e( '2.3 Person Production Timeline', 'gatherpress-relations' ); ?></h4>
+			<p class="gatherpress-relations__paragraph">
+				<?php esc_html_e( 'A visual timeline showing every production a person has been involved in, ordered chronologically, with role names and linked production cards. Ideal for the single-gatherpress_person.html template.', 'gatherpress-relations' ); ?>
+			</p>
+			<div class="gatherpress-relations__code-block">
+				<code class="gatherpress-relations__code">// Timeline data structure (assembled in render.php):
+// For gatherpress_person post_id = 15 ("Jane Doe"):
+//
+// 1. Resolve shadow term: slug "_jane-doe" in _gatherpress_person taxonomy
+// 2. Query all consumer posts tagged with that shadow term using
+//    get_post_types_by_support( 'gatherpress-relations' ) for the post_type arg
+// 3. For each result, extract role from _gatherpress_relations meta
+//
+$timeline = [
+    [
+        'year'        =&gt; '2024',
+        'production'  =&gt; 'Hamlet',
+        'post_id'     =&gt; 42,
+        'role'        =&gt; 'Hamlet',
+        'department'  =&gt; 'cast',
+        'permalink'   =&gt; '/production/hamlet/',
+    ],
+    [
+        'year'        =&gt; '2023',
+        'production'  =&gt; 'A Midsummer Night\'s Dream',
+        'post_id'     =&gt; 38,
+        'role'        =&gt; 'Titania',
+        'department'  =&gt; 'cast',
+        'permalink'   =&gt; '/production/midsummer/',
+    ],
+    [
+        'year'        =&gt; '2023',
+        'production'  =&gt; 'The Tempest',
+        'post_id'     =&gt; 35,
+        'role'        =&gt; 'Assistant Director',
+        'department'  =&gt; 'direction',
+        'permalink'   =&gt; '/production/tempest/',
+    ],
+];
+// Rendered as a vertical timeline with year markers,
+// linked production titles, role badges, and department indicators.
+// Each production card links to the production single page.</code>
+			</div>
+
+			<div class="gatherpress-relations__callout gatherpress-relations__callout--info">
+				<p class="gatherpress-relations__callout-title"><?php esc_html_e( 'Using gatherpress/event-query for Contextual Scoping', 'gatherpress-relations' ); ?></p>
+				<p class="gatherpress-relations__callout-text">
+					<?php esc_html_e( 'The gatherpress/event-query block\'s "Filter by Current Venue" toggle automatically scopes to whatever shadow-source CPT the queried page represents. On a gatherpress_person singular page, it scopes to that person\'s events; on a gatherpress_play singular, to that production\'s events. The toggle label adapts in the editor via usePostTypeLabel — users editing a Person template see "Filter by Current Person". No custom code needed.', 'gatherpress-relations' ); ?>
+				</p>
+			</div>
+			<?php
+			return ob_get_clean();
+		}
+
+		/**
+		 * Section 4: Smart Data-Relation Visualizations.
+		 *
+		 * CONTENT SUMMARY:
+		 * - "Where Have You Seen Them?" block (person → productions via shadow taxonomy)
+		 * - "Who's In This Show?" block (production → persons via shadow terms + junction meta)
+		 * - "Upcoming for You" recommendation block (GatherPress RSVP integration)
+		 * - Query patterns and REST endpoints
+		 * - Shadow_Source utility methods for custom Query Loop blocks
+		 *
+		 * @since  0.1.0
+		 * @return string Section body HTML.
+		 */
+		private function render_visualizations(): string {
+			ob_start();
+			?>
+			<p class="gatherpress-relations__paragraph">
+				<?php esc_html_e( 'These blocks query relationships dynamically — they follow the shadow taxonomy links between persons, productions, and events to surface meaningful connections. Because the shadow taxonomy is a native WordPress taxonomy, all queries use core\'s optimised term_relationships table.', 'gatherpress-relations' ); ?>
+			</p>
+
+			<h4 class="gatherpress-relations__heading"><?php esc_html_e( '3.1 "Where Have You Seen Them?"', 'gatherpress-relations' ); ?></h4>
+			<p class="gatherpress-relations__paragraph">
+				<?php esc_html_e( 'Given a person, show all productions/events they have appeared in with role names. This block auto-populates on a person\'s single page template.', 'gatherpress-relations' ); ?>
+			</p>
+			<div class="gatherpress-relations__code-block">
+				<code class="gatherpress-relations__code">// Query: "Find all consumer posts featuring gatherpress_person post_id = 15"
+//
+// Step 1: Resolve the person's shadow term in the _gatherpress_person taxonomy.
+$person_slug  = get_post_field( 'post_name', 15 );     // "jane-doe"
+$shadow_slug  = '_' . $person_slug;                      // "_jane-doe"
+$shadow_term  = get_term_by( 'slug', $shadow_slug, '_gatherpress_person' );
+
+// Step 2: Query ALL consumer post types tagged with that shadow term.
+// Use get_post_types_by_support() so no slug is hard-coded.
+$consumer_types = get_post_types_by_support( 'gatherpress-relations' );
+
+$results = get_posts( [
+    'post_type'      =&gt; $consumer_types,
+    'posts_per_page' =&gt; 50,
+    'tax_query'      =&gt; [
+        [
+            'taxonomy' =&gt; '_gatherpress_person',
+            'terms'    =&gt; $shadow_term-&gt;term_id,
+        ],
+    ],
+    'orderby' =&gt; 'date',
+    'order'   =&gt; 'DESC',
+] );
+
+// Step 3: For each result, extract the role from _gatherpress_relations meta.
+foreach ( $results as $post ) {
+    $relations = json_decode(
+        get_post_meta( $post-&gt;ID, '_gatherpress_relations', true ) ?: '[]',
+        true
+    );
+    $person_entry = array_filter(
+        $relations,
+        fn( $e ) =&gt; $e['person_shadow_slug'] === $shadow_slug
+    );
+    $entry = reset( $person_entry );
+    // $entry['role'] =&gt; "Hamlet"
+    // $entry['department'] =&gt; "cast"
+}
+
+// WHY this is elegant:
+// The taxonomy query uses WordPress core's optimised indices.
+// The role extraction is a simple JSON parse on a small array.
+// No custom table needed at this scale.</code>
+			</div>
+
+			<h4 class="gatherpress-relations__heading"><?php esc_html_e( '3.2 "Who\'s In This Show?"', 'gatherpress-relations' ); ?></h4>
+			<p class="gatherpress-relations__paragraph">
+				<?php esc_html_e( 'The inverse query: on a production page, list every cast and crew member with links to their person page. This is essentially what the Cast & Crew List block does (Section 2), enriched with cross-query data showing each person\'s total production count.', 'gatherpress-relations' ); ?>
+			</p>
+			<div class="gatherpress-relations__code-block">
+				<code class="gatherpress-relations__code">// On gatherpress_play post_id = 42:
+$relations = json_decode(
+    get_post_meta( 42, '_gatherpress_relations', true ) ?: '[]',
+    true
+);
+
+foreach ( $relations as $entry ) {
+    // Resolve person post from shadow slug.
+    // Shadow slug "_jane-doe" maps to gatherpress_person post_name "jane-doe".
+    $person_post_id = $entry['person_post_id'];
+    $person_post    = get_post( $person_post_id );
+    $permalink      = get_permalink( $person_post_id );
+
+    // Count how many consumer posts this person appears in.
+    // Use the shadow term's count — WordPress maintains this automatically!
+    $shadow_term = get_term_by( 'slug', $entry['person_shadow_slug'], '_gatherpress_person' );
+    $total_appearances = $shadow_term ? $shadow_term-&gt;count : 0;
+
+    // Render: "Jane Doe as Hamlet (12 productions)"
+    // with a link to /person/jane-doe/
+}</code>
+			</div>
+
+			<h4 class="gatherpress-relations__heading"><?php esc_html_e( '3.3 "Upcoming for You" (with GatherPress)', 'gatherpress-relations' ); ?></h4>
+			<p class="gatherpress-relations__paragraph">
+				<?php esc_html_e( 'If integrated with GatherPress RSVP data, this block can recommend upcoming productions and events based on the visitor\'s attendance history. The logic:', 'gatherpress-relations' ); ?>
+			</p>
+			<ul class="gatherpress-relations__list">
+				<li><?php esc_html_e( '1. Find events the user has RSVP\'d to (GatherPress attendance data).', 'gatherpress-relations' ); ?></li>
+				<li><?php esc_html_e( '2. For each attended event, get the _gatherpress_person shadow terms and _gatherpress_play shadow terms assigned to it.', 'gatherpress-relations' ); ?></li>
+				<li><?php esc_html_e( '3. Find upcoming events that share any of those shadow terms (same persons or same productions).', 'gatherpress-relations' ); ?></li>
+				<li><?php esc_html_e( '4. Render: "You attended Hamlet — the same director\'s next event is The Tempest Opening Night."', 'gatherpress-relations' ); ?></li>
+			</ul>
+
+			<div class="gatherpress-relations__callout gatherpress-relations__callout--info">
+				<p class="gatherpress-relations__callout-title"><?php esc_html_e( 'REST Endpoint for Recommendations', 'gatherpress-relations' ); ?></p>
+				<p class="gatherpress-relations__callout-text">
+					<?php esc_html_e( 'This recommendation query is too complex for render.php alone. Create a custom REST endpoint (e.g., gatherpress-relations/v1/recommendations) that accepts a list of attended event IDs and returns upcoming events with shared shadow terms. The block\'s view.js fetches this endpoint asynchronously after page load.', 'gatherpress-relations' ); ?>
+				</p>
+			</div>
+
+			<h4 class="gatherpress-relations__heading"><?php esc_html_e( 'REST API Design for Relation Queries', 'gatherpress-relations' ); ?></h4>
+			<div class="gatherpress-relations__code-block">
+				<code class="gatherpress-relations__code">// Custom REST endpoints for relation queries:
+
+// GET /gatherpress-relations/v1/person/15/appearances
+// Resolves gatherpress_person post 15's shadow term, queries consumer
+// posts tagged with it (using get_post_types_by_support), enriches
+// with role data from _gatherpress_relations meta.
+// Response:
+[
+  {
+    "consumer_id": 42,
+    "consumer_type": "gatherpress_play",
+    "title": "Hamlet",
+    "role": "Hamlet",
+    "department": "cast",
+    "date": "2024-03-15",
+    "permalink": "https://example.com/production/hamlet/"
+  }
+]
+
+// GET /gatherpress-relations/v1/consumer/42/relations
+// Reads _gatherpress_relations meta, resolves each person post, groups
+// by department.
+// Response:
+{
+  "cast": [
+    {
+      "person_post_id": 15,
+      "name": "Jane Doe",
+      "role": "Hamlet",
+      "headshot": "https://example.com/wp-content/uploads/...",
+      "permalink": "https://example.com/person/jane-doe/"
+    }
+  ],
+  "direction": [
+    {
+      "person_post_id": 8,
+      "name": "Sam Chen",
+      "role": "Director",
+      "headshot": "...",
+      "permalink": "https://example.com/person/sam-chen/"
+    }
+  ]
+}
+
+// GET /gatherpress-relations/v1/recommendations?attended=78,92
+// Finds shadow terms from attended events, queries upcoming
+// events sharing those terms.
+// Response:
+[
+  {
+    "event_id": 110,
+    "title": "The Tempest Opening Night",
+    "reason": "Same director: Sam Chen",
+    "date": "2025-01-20",
+    "permalink": "https://example.com/event/tempest-opening/"
+  }
+]</code>
+			</div>
+
+			<h4 class="gatherpress-relations__heading"><?php esc_html_e( 'Reusing Shadow_Source Query Primitives', 'gatherpress-relations' ); ?></h4>
+			<p class="gatherpress-relations__paragraph">
+				<?php esc_html_e( 'If you are building a custom Query Loop block that needs "scope to the current shadow-source page" behavior, two public methods on Shadow_Source do the heavy lifting:', 'gatherpress-relations' ); ?>
+			</p>
+			<div class="gatherpress-relations__code-block">
+				<code class="gatherpress-relations__code">use GatherPress\Core\Shadow_Source;
+
+// Inside a pre_get_posts callback:
+$shadow_source = Shadow_Source::get_instance();
+$source_post   = $shadow_source-&gt;resolve_post_from_query_context( $query );
+
+if ( $source_post instanceof WP_Post ) {
+    $tax_query   = (array) ( $query-&gt;get( 'tax_query' ) ?: [] );
+    $tax_query[] = $shadow_source-&gt;build_tax_query_clause( $source_post );
+    $query-&gt;set( 'tax_query', $tax_query );
+}
+
+// resolve_post_from_query_context() handles both paths:
+// - Frontend: uses is_singular() to find the current post
+// - REST editor preview: reads gatherpress_shadow_source_post_id
+//   and gatherpress_shadow_source_post_type from query attributes
+//
+// build_tax_query_clause() returns:
+// [
+//     'taxonomy' =&gt; '_gatherpress_person',  // (or _gatherpress_play, _gatherpress_venue, etc.)
+//     'field'    =&gt; 'term_id',
+//     'terms'    =&gt; [ 42 ],                 // the shadow term ID for this source post
+// ]</code>
+			</div>
+			<?php
+			return ob_get_clean();
+		}
+
+		/**
+		 * Section 5: Scaling & Performance.
+		 *
+		 * CONTENT SUMMARY:
+		 * - Shadow taxonomy query performance characteristics
+		 * - Caching strategy with transients for cross-queries
+		 * - Denormalized lookup table for very large datasets
+		 * - Object cache integration
+		 * - Migration path
+		 *
+		 * @since  0.1.0
+		 * @return string Section body HTML.
+		 */
+		private function render_scaling(): string {
+			ob_start();
+			?>
+			<p class="gatherpress-relations__paragraph">
+				<?php esc_html_e( 'The shadow taxonomy approach is inherently performant because it leverages WordPress core\'s indexed term_relationships table for the many-to-many join. The JSON junction meta (_gatherpress_relations) is parsed in PHP, but each consumer post\'s relations list is a small array — typically 5–30 entries. The scaling concern arises only for cross-queries ("all appearances for person X") at very large scale.', 'gatherpress-relations' ); ?>
+			</p>
+
+			<h4 class="gatherpress-relations__heading"><?php esc_html_e( 'Scaling Tiers', 'gatherpress-relations' ); ?></h4>
+			<div class="gatherpress-relations__table-wrap">
+				<table class="gatherpress-relations__table">
+					<thead>
+						<tr>
+							<th><?php esc_html_e( 'Scale', 'gatherpress-relations' ); ?></th>
+							<th><?php esc_html_e( 'Consumer Posts', 'gatherpress-relations' ); ?></th>
+							<th><?php esc_html_e( 'Strategy', 'gatherpress-relations' ); ?></th>
+							<th><?php esc_html_e( 'Read Performance', 'gatherpress-relations' ); ?></th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td><?php esc_html_e( 'Small', 'gatherpress-relations' ); ?></td>
+							<td><?php esc_html_e( '< 100', 'gatherpress-relations' ); ?></td>
+							<td><?php esc_html_e( 'Shadow taxonomy tax_query + JSON meta parse', 'gatherpress-relations' ); ?></td>
+							<td><?php esc_html_e( '< 50ms', 'gatherpress-relations' ); ?></td>
+						</tr>
+						<tr>
+							<td><?php esc_html_e( 'Medium', 'gatherpress-relations' ); ?></td>
+							<td><?php esc_html_e( '100–500', 'gatherpress-relations' ); ?></td>
+							<td><?php esc_html_e( 'Same + transient cache for enriched results', 'gatherpress-relations' ); ?></td>
+							<td><?php esc_html_e( '< 100ms (first), < 5ms (cached)', 'gatherpress-relations' ); ?></td>
+						</tr>
+						<tr>
+							<td><?php esc_html_e( 'Large', 'gatherpress-relations' ); ?></td>
+							<td><?php esc_html_e( '500+', 'gatherpress-relations' ); ?></td>
+							<td><?php esc_html_e( 'Denormalized lookup table', 'gatherpress-relations' ); ?></td>
+							<td><?php esc_html_e( '< 10ms', 'gatherpress-relations' ); ?></td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
+
+			<h4 class="gatherpress-relations__heading"><?php esc_html_e( 'Transient Caching (Medium Scale)', 'gatherpress-relations' ); ?></h4>
+			<div class="gatherpress-relations__code-block">
+				<code class="gatherpress-relations__code">// Cache the "appearances for person X" enriched query result.
+function gatherpress_get_person_appearances( int $person_post_id ): array {
+    $cache_key = 'gp_person_appearances_' . $person_post_id;
+    $cached    = get_transient( $cache_key );
+
+    if ( false !== $cached ) {
+        return $cached;
+    }
+
+    // Resolve shadow term.
+    $shadow_slug = '_' . get_post_field( 'post_name', $person_post_id );
+    $shadow_term = get_term_by( 'slug', $shadow_slug, '_gatherpress_person' );
+
+    if ( ! $shadow_term ) {
+        return [];
+    }
+
+    // Discover consumer types dynamically.
+    $consumer_types = get_post_types_by_support( 'gatherpress-relations' );
+
+    // Taxonomy query: fast, uses core's indexed term_relationships.
+    $posts = get_posts( [
+        'post_type'      =&gt; $consumer_types,
+        'posts_per_page' =&gt; 100,
+        'tax_query'      =&gt; [
+            [ 'taxonomy' =&gt; '_gatherpress_person', 'terms' =&gt; $shadow_term-&gt;term_id ],
+        ],
+    ] );
+
+    // Enrich with role data from each consumer's meta.
+    $result = [];
+    foreach ( $posts as $post ) {
+        $relations = json_decode( get_post_meta( $post-&gt;ID, '_gatherpress_relations', true ) ?: '[]', true );
+        $entry     = array_filter( $relations, fn( $e ) =&gt; $e['person_shadow_slug'] === $shadow_slug );
+        $entry     = reset( $entry );
+        $result[]  = [
+            'consumer_id'   =&gt; $post-&gt;ID,
+            'consumer_type' =&gt; $post-&gt;post_type,
+            'title'         =&gt; $post-&gt;post_title,
+            'role'          =&gt; $entry['role'] ?? '',
+            'department'    =&gt; $entry['department'] ?? '',
+            'date'          =&gt; $post-&gt;post_date,
+        ];
+    }
+
+    set_transient( $cache_key, $result, HOUR_IN_SECONDS );
+    return $result;
+}
+
+// Invalidate on any consumer post save.
+// When a consumer post is saved, clear caches for every person
+// tagged on it via the _gatherpress_person shadow taxonomy.
+//
+// This hook fires for ALL post types — we check for gatherpress-relations
+// support before doing any work.
+add_action( 'save_post', function( int $post_id ): void {
+    $post_type = get_post_type( $post_id );
+    if ( ! $post_type || ! post_type_supports( $post_type, 'gatherpress-relations' ) ) {
+        return;
+    }
+
+    $shadow_terms = wp_get_object_terms( $post_id, '_gatherpress_person', [ 'fields' =&gt; 'slugs' ] );
+    foreach ( $shadow_terms as $slug ) {
+        // Shadow slug "_jane-doe" → person post_name "jane-doe"
+        $person_slug  = ltrim( $slug, '_' );
+        $person_posts = get_posts( [
+            'post_type'      =&gt; 'gatherpress_person',
+            'name'           =&gt; $person_slug,
+            'fields'         =&gt; 'ids',
+            'posts_per_page' =&gt; 1,
+        ] );
+        if ( ! empty( $person_posts ) ) {
+            delete_transient( 'gp_person_appearances_' . $person_posts[0] );
+        }
+    }
+} );</code>
+			</div>
+
+			<h4 class="gatherpress-relations__heading"><?php esc_html_e( 'Denormalized Lookup Table (Large Scale)', 'gatherpress-relations' ); ?></h4>
+			<p class="gatherpress-relations__paragraph">
+				<?php esc_html_e( 'For 500+ consumer posts, a custom database table gives SQL-level indexing on the person ↔ consumer ↔ role relationship. The JSON meta remains the source of truth; the lookup table is a denormalized cache rebuilt on each save_post.', 'gatherpress-relations' ); ?>
+			</p>
+			<div class="gatherpress-relations__code-block">
+				<code class="gatherpress-relations__code">// Custom table schema:
+// Table: {$wpdb-&gt;prefix}gatherpress_relations_lookup
+//
+// ┌────────┬─────────────────┬────────────────┬──────────────┬───────────┬───────────────┐
+// │ id     │ consumer_id     │ person_id      │ role         │ department│ billing_order │
+// │ BIGINT │ BIGINT (FK)     │ BIGINT (FK)    │ VARCHAR(255) │ VARCHAR   │ INT           │
+// ├────────┼─────────────────┼────────────────┼──────────────┼───────────┼───────────────┤
+// │ 1      │ 42 (gp_play)    │ 15 (gp_person) │ Hamlet       │ cast      │ 1             │
+// │ 2      │ 42 (gp_play)    │ 23 (gp_person) │ Ophelia      │ cast      │ 2             │
+// │ 3      │ 78 (gp_event)   │ 15 (gp_person) │ Host         │ other     │ 1             │
+// └────────┴─────────────────┴────────────────┴──────────────┴───────────┴───────────────┘
+//
+// Indices:
+// - PRIMARY KEY (id)
+// - INDEX (consumer_id)   -- "Who's in this show?"
+// - INDEX (person_id)     -- "Where have you seen them?"
+// - INDEX (department)    -- Filter by department
+//
+// Query: "All consumer posts for person 15":
+// SELECT * FROM {table} WHERE person_id = 15
+//     ORDER BY consumer_id DESC;
+// → &lt; 1ms even with 10,000 rows.
+//
+// WHY "consumer_id" instead of "production_id"?
+// The lookup table is agnostic — it works for gatherpress_play,
+// gatherpress_event, sessions, or any consumer post type. The
+// consumer_id column stores the post ID of whatever post type
+// the person is connected to.</code>
+			</div>
+
+			<div class="gatherpress-relations__callout gatherpress-relations__callout--tip">
+				<p class="gatherpress-relations__callout-title"><?php esc_html_e( 'Migration Path', 'gatherpress-relations' ); ?></p>
+				<p class="gatherpress-relations__callout-text">
+					<?php esc_html_e( 'Start with shadow taxonomy + JSON meta (Phase 1). Add transient caching (Phase 2). If you exceed 500 consumer posts, create the lookup table with dbDelta and backfill from existing _gatherpress_relations meta. The JSON meta remains the canonical source — the lookup table is rebuilt on every save_post. The shadow taxonomy join continues to work in parallel, so existing blocks need zero changes.', 'gatherpress-relations' ); ?>
+				</p>
+			</div>
+
+			<h4 class="gatherpress-relations__heading"><?php esc_html_e( 'Object Cache Integration', 'gatherpress-relations' ); ?></h4>
+			<p class="gatherpress-relations__paragraph">
+				<?php esc_html_e( 'On hosts with a persistent object cache (Redis, Memcached), transients are already stored in-memory. For the lookup table approach, use wp_cache_get/wp_cache_set with a group key:', 'gatherpress-relations' ); ?>
+			</p>
+			<div class="gatherpress-relations__code-block">
+				<code class="gatherpress-relations__code">$cache_key   = 'person_appearances_' . $person_post_id;
+$cache_group = 'gatherpress_relations';
+
+$result = wp_cache_get( $cache_key, $cache_group );
+if ( false === $result ) {
+    $result = $wpdb-&gt;get_results( $wpdb-&gt;prepare(
+        "SELECT * FROM {$wpdb-&gt;prefix}gatherpress_relations_lookup WHERE person_id = %d",
+        $person_post_id
+    ) );
+    wp_cache_set( $cache_key, $result, $cache_group, HOUR_IN_SECONDS );
+}</code>
+			</div>
+			<?php
+			return ob_get_clean();
+		}
+
+		/**
+		 * Section 6: Implementation Roadmap.
+		 *
+		 * CONTENT SUMMARY:
+		 * - Phased rollout plan
+		 * - Phase 1 (Alpha): gatherpress_person CPT + gatherpress-relations support + Cast & Crew block
+		 * - Phase 2 (Beta): People blocks + caching
+		 * - Phase 3 (GA): Visualization blocks + REST endpoints
+		 * - Phase 4 (Future): Lookup table + expanded GatherPress integration
+		 * - File structure
+		 *
+		 * @since  0.1.0
+		 * @return string Section body HTML.
+		 */
+		private function render_implementation(): string {
+			ob_start();
+			?>
+			<p class="gatherpress-relations__paragraph">
+				<?php esc_html_e( 'A phased approach ensures each layer is stable before adding complexity. Each phase delivers a usable, testable increment. The architecture is agnostic from Phase 1 — nothing is hard-bound to any post type slug. All new functionality is gated behind gatherpress-relations post_type_supports, following the same extensibility model GatherPress uses for gatherpress-shadow-source, gatherpress-venue-information, and other features. Any post type can opt in by adding the relevant support string. Discovery uses WP core\'s get_post_types_by_support().', 'gatherpress-relations' ); ?>
+			</p>
+
+			<div class="gatherpress-relations__callout gatherpress-relations__callout--key">
+				<p class="gatherpress-relations__callout-title"><?php esc_html_e( 'Fixed Decision: Production Is External', 'gatherpress-relations' ); ?></p>
+				<p class="gatherpress-relations__callout-text">
+					<?php esc_html_e( 'The gatherpress_play post type is registered and provided by the gatherpress-productions plugin. We never register it ourselves — we only consume its data. The gatherpress-productions plugin already declares gatherpress-shadow-source support on gatherpress_play, so the _gatherpress_play shadow taxonomy exists when the plugin is active. Our plugin only needs to wire its own shadow taxonomies and supports onto consumer post types.', 'gatherpress-relations' ); ?>
+				</p>
+			</div>
+
+			<div class="gatherpress-relations__callout gatherpress-relations__callout--info">
+				<p class="gatherpress-relations__callout-title"><?php esc_html_e( 'The post_type_supports Pattern', 'gatherpress-relations' ); ?></p>
+				<p class="gatherpress-relations__callout-text">
+					<?php esc_html_e( 'Every new capability in this plugin is registered as a post_type_supports string — not bound to a specific post type slug. A post type opts in by adding the support to its supports array (or via add_post_type_support()). The plugin hooks into init at priority 100 and uses get_post_types_by_support( "gatherpress-relations" ) to discover all consumer post types, then wires the corresponding taxonomy, meta, and block functionality. This is the same idiom GatherPress uses: gatherpress-shadow-source, gatherpress-venue-information are all post_type_supports strings. It means any third-party post type can adopt the relations system by adding a single line to its registration.', 'gatherpress-relations' ); ?>
+				</p>
+			</div>
+
+			<div class="gatherpress-relations__phase gatherpress-relations__phase--alpha">
+				<h4 class="gatherpress-relations__phase-title"><?php esc_html_e( 'Phase 1 — Alpha: Foundation', 'gatherpress-relations' ); ?></h4>
+				<p class="gatherpress-relations__phase-text"><?php esc_html_e( 'Register the gatherpress_person post type with gatherpress-shadow-source support. Define the gatherpress-relations support as a feature flag that any consumer post type can declare to gain the cast/crew assignment UI and _gatherpress_relations junction meta. The gatherpress_play post type is provided by gatherpress-productions — we do not register it; we only add_post_type_support for our features onto it (if it exists). Wire the _gatherpress_person shadow taxonomy onto all post types that declare gatherpress-relations support via the gatherpress_shadow_taxonomy_object_types filter, discovered by get_post_types_by_support(). Build the Cast & Crew List block.', 'gatherpress-relations' ); ?></p>
+
+				<h5 class="gatherpress-relations__heading"><?php esc_html_e( 'Step 1: Register the gatherpress_person Post Type', 'gatherpress-relations' ); ?></h5>
+				<p class="gatherpress-relations__paragraph">
+					<?php esc_html_e( 'The gatherpress_person post type is the only CPT this plugin registers. It declares gatherpress-shadow-source so it gets a _gatherpress_person shadow taxonomy automatically.', 'gatherpress-relations' ); ?>
+				</p>
+				<div class="gatherpress-relations__code-block">
+					<code class="gatherpress-relations__code">// Register the gatherpress_person post type.
+// This is the ONLY post type we register — gatherpress_play comes
+// from gatherpress-productions and we consume it as-is.
+register_post_type( 'gatherpress_person', [
+    'label'        =&gt; __( 'People', 'gatherpress-relations' ),
+    'labels'       =&gt; [
+        'name'          =&gt; __( 'People', 'gatherpress-relations' ),
+        'singular_name' =&gt; __( 'Person', 'gatherpress-relations' ),
+        'add_new_item'  =&gt; __( 'Add New Person', 'gatherpress-relations' ),
+        'edit_item'     =&gt; __( 'Edit Person', 'gatherpress-relations' ),
+    ],
+    'public'       =&gt; true,
+    'has_archive'  =&gt; 'people',
+    'show_in_rest' =&gt; true,
+    'rest_base'    =&gt; 'people',
+    'menu_icon'    =&gt; 'dashicons-groups',
+    'supports'     =&gt; [
+        'title',
+        'editor',
+        'thumbnail',
+        'excerpt',
+        'custom-fields',
+        'gatherpress-shadow-source',  // Auto-creates _gatherpress_person shadow taxonomy
+    ],
+    'rewrite' =&gt; [ 'slug' =&gt; 'person' ],
+] );</code>
+				</div>
+
+				<h5 class="gatherpress-relations__heading"><?php esc_html_e( 'Step 2: Define the gatherpress-relations Support', 'gatherpress-relations' ); ?></h5>
+				<p class="gatherpress-relations__paragraph">
+					<?php esc_html_e( 'The gatherpress-relations support is a feature flag. Any post type that declares it gets: (a) the _gatherpress_person shadow taxonomy wired onto it, (b) the _gatherpress_relations post meta registered, and (c) the Cast & Crew List block available in its editor context. The plugin uses get_post_types_by_support( "gatherpress-relations" ) on init:100 and wires everything dynamically — no post type slug is hard-coded in the wiring layer.', 'gatherpress-relations' ); ?>
+				</p>
+				<div class="gatherpress-relations__code-block">
+					<code class="gatherpress-relations__code">/**
+ * Wire shadow taxonomy + junction meta onto every post type
+ * that declares 'gatherpress-relations' support.
+ *
+ * HOW this works:
+ * On 'init' (priority 100, safely after ALL CPTs are registered),
+ * use WP core's get_post_types_by_support() to discover consumer
+ * post types. For each one, register the _gatherpress_relations meta
+ * and collect the slug for shadow taxonomy wiring.
+ *
+ * WHY get_post_types_by_support()?
+ * This is a WP core function (since 4.7) that returns an array of
+ * post type slugs declaring the given support. It's the canonical,
+ * fastest way to discover supporting CPTs without manual iteration.
+ * Signature: get_post_types_by_support( array|string $feature, string $operator = 'and' ): string[]
+ *
+ * WHY priority 100?
+ * Ensures ALL plugins and themes have registered their CPTs before
+ * we scan. GatherPress registers at default priority (10), and
+ * gatherpress-productions may register at a slightly higher priority.
+ * Using 100 is a safe belt-and-suspenders approach.
+ *
+ * WHY post_type_supports instead of a hard-coded list?
+ * - Any third-party plugin can opt its CPT in with one line:
+ *   add_post_type_support( 'my_cpt', 'gatherpress-relations' );
+ * - The wiring layer never mentions 'gatherpress_play' or
+ *   'gatherpress_event' by name — it discovers them at runtime.
+ * - This mirrors GatherPress's own pattern: gatherpress-shadow-source,
+ *   gatherpress-venue-information are all post_type_supports strings.
+ */
+add_action( 'init', function (): void {
+    $consumers = get_post_types_by_support( 'gatherpress-relations' );
+
+    foreach ( $consumers as $pt ) {
+        // Register junction meta per consumer.
+        register_post_meta( $pt, '_gatherpress_relations', [
+            'type'          =&gt; 'string',
+            'single'        =&gt; true,
+            'show_in_rest'  =&gt; true,
+            'description'   =&gt; 'JSON array of person-role assignments.',
+            'auth_callback' =&gt; function (): bool {
+                return current_user_can( 'edit_posts' );
+            },
+        ] );
+    }
+
+    // Wire the _gatherpress_person shadow taxonomy onto all consumers.
+    if ( ! empty( $consumers ) ) {
+        add_filter(
+            'gatherpress_shadow_taxonomy_object_types',
+            function ( array $object_types, string $source ) use ( $consumers ): array {
+                if ( 'gatherpress_person' === $source ) {
+                    $object_types = array_merge( $object_types, $consumers );
+                }
+                return array_unique( $object_types );
+            },
+            10,
+            2
+        );
+    }
+}, 100 ); // Priority 100: safely after ALL CPTs are registered.</code>
+				</div>
+
+				<h5 class="gatherpress-relations__heading"><?php esc_html_e( 'Step 3: Add Support to the gatherpress_play Post Type', 'gatherpress-relations' ); ?></h5>
+				<p class="gatherpress-relations__paragraph">
+					<?php esc_html_e( 'The gatherpress_play post type is registered by gatherpress-productions. We add our support flag to it — the wiring layer at priority 100 discovers it automatically. If gatherpress-productions is not active, this call is a no-op.', 'gatherpress-relations' ); ?>
+				</p>
+				<div class="gatherpress-relations__code-block">
+					<code class="gatherpress-relations__code">/**
+ * Opt the gatherpress_play post type into the relations system.
+ *
+ * WHY add_post_type_support instead of editing the CPT registration?
+ * The gatherpress_play CPT is owned by gatherpress-productions — we
+ * never modify its registration. add_post_type_support() is the
+ * idiomatic way for one plugin to extend another's post type.
+ *
+ * WHY priority 15?
+ * gatherpress-productions registers gatherpress_play at priority 10.
+ * We add support at 15, before our wiring callback at 100 scans
+ * for the support flag via get_post_types_by_support().
+ *
+ * If gatherpress-productions is not active, post_type_exists()
+ * returns false and we skip — no fatal, no dependency error.
+ */
+add_action( 'init', function (): void {
+    if ( post_type_exists( 'gatherpress_play' ) ) {
+        add_post_type_support( 'gatherpress_play', 'gatherpress-relations' );
+    }
+}, 15 );
+
+// The same pattern works for events, sessions, or any other
+// consumer post type — the CPT owner or a bridge plugin adds:
+//   add_post_type_support( 'gatherpress_event', 'gatherpress-relations' );
+// and the wiring layer discovers it automatically at init:100.</code>
+				</div>
+
+				<h5 class="gatherpress-relations__heading"><?php esc_html_e( 'Step 4: Build the Cast & Crew List Block', 'gatherpress-relations' ); ?></h5>
+				<p class="gatherpress-relations__paragraph">
+					<?php esc_html_e( 'The block is agnostic — its render.php reads _gatherpress_relations meta from the current post regardless of post type. It works on any post type that has gatherpress-relations support. The block checks the support flag and renders a helpful fallback if the current post type does not support it.', 'gatherpress-relations' ); ?>
+				</p>
+				<div class="gatherpress-relations__code-block">
+					<code class="gatherpress-relations__code">// In render.php of the cast-crew-list block:
+
+$post_id   = get_the_ID();
+$post_type = get_post_type( $post_id );
+
+// Guard: only render on post types that support the relations system.
+if ( ! post_type_supports( $post_type, 'gatherpress-relations' ) ) {
+    return '&lt;p&gt;' . esc_html__(
+        'This post type does not support person-role assignments.',
+        'gatherpress-relations'
+    ) . '&lt;/p&gt;';
+}
+
+// Read the junction meta — same key on every supporting post type.
+$relations = json_decode(
+    get_post_meta( $post_id, '_gatherpress_relations', true ) ?: '[]',
+    true
+);
+
+// Group by department, resolve person posts, render cards...
+// (identical to Section 2's render logic)</code>
+				</div>
+
+				<h5 class="gatherpress-relations__heading"><?php esc_html_e( 'Step 5: Editor JS — Discovering Supports via Core Data Store', 'gatherpress-relations' ); ?></h5>
+				<p class="gatherpress-relations__paragraph">
+					<?php esc_html_e( 'In the block editor, use the @wordpress/core-data store to dynamically check whether the current post type supports gatherpress-relations. This enables UI elements to adapt to the runtime context without hard-coding any slug:', 'gatherpress-relations' ); ?>
+				</p>
+				<div class="gatherpress-relations__code-block">
+					<code class="gatherpress-relations__code">import { useSelect } from '@wordpress/data';
+import { store as coreStore } from '@wordpress/core-data';
+import { store as editorStore } from '@wordpress/editor';
+
+/**
+ * Hook: check if the current post type supports gatherpress-relations.
+ *
+ * HOW this works:
+ * 1. Read the current post type from the editor store.
+ * 2. Fetch the post type object from the core data store.
+ * 3. Check its `supports` property for 'gatherpress-relations'.
+ *
+ * WHY the core data store?
+ * - The REST API (/wp/v2/types/{slug}) exposes the supports object.
+ * - The store caches it across components — no redundant HTTP requests.
+ * - No custom endpoint needed.
+ *
+ * @returns {{ supportsRelations: boolean, isResolving: boolean }}
+ */
+function useSupportsRelations() {
+    return useSelect( ( select ) =&gt; {
+        const currentPostType = select( editorStore ).getCurrentPostType();
+        const postTypeObj     = select( coreStore ).getPostType( currentPostType );
+
+        if ( ! postTypeObj ) {
+            return { supportsRelations: false, isResolving: true };
+        }
+
+        return {
+            supportsRelations: !! postTypeObj.supports?.[ 'gatherpress-relations' ],
+            isResolving: false,
+        };
+    }, [] );
+}</code>
+				</div>
+
+				<div class="gatherpress-relations__callout gatherpress-relations__callout--tip">
+					<p class="gatherpress-relations__callout-title"><?php esc_html_e( 'Extensibility Via Supports', 'gatherpress-relations' ); ?></p>
+					<p class="gatherpress-relations__callout-text">
+						<?php esc_html_e( 'A conference plugin that registers a "session" post type can adopt the entire relations system with one line: add_post_type_support( "session", "gatherpress-relations" ). The _gatherpress_relations meta, the _gatherpress_person shadow taxonomy wiring, and the Cast & Crew List block all activate automatically — discovered by get_post_types_by_support() at init:100. No code changes in our plugin. This is the power of the post_type_supports pattern.', 'gatherpress-relations' ); ?>
+					</p>
+				</div>
+
+				<h5 class="gatherpress-relations__heading"><?php esc_html_e( 'Phase 1 Deliverables Summary', 'gatherpress-relations' ); ?></h5>
+				<ul class="gatherpress-relations__list">
+					<li><code class="gatherpress-relations__inline-code">register_post_type( 'gatherpress_person', [ 'supports' =&gt; [ ..., 'gatherpress-shadow-source' ] ] )</code> <?php esc_html_e( '— only CPT we register', 'gatherpress-relations' ); ?></li>
+					<li><?php esc_html_e( 'New post_type_supports: gatherpress-relations — feature flag for consumer post types', 'gatherpress-relations' ); ?></li>
+					<li><code class="gatherpress-relations__inline-code">add_post_type_support( 'gatherpress_play', 'gatherpress-relations' )</code> <?php esc_html_e( '— bridge to gatherpress-productions', 'gatherpress-relations' ); ?></li>
+					<li><?php esc_html_e( 'Dynamic wiring: init:100 callback uses get_post_types_by_support( "gatherpress-relations" ) to discover consumers, registers _gatherpress_relations meta and wires _gatherpress_person shadow taxonomy', 'gatherpress-relations' ); ?></li>
+					<li><code class="gatherpress-relations__inline-code">add_filter( 'gatherpress_shadow_taxonomy_object_types', ... )</code> <?php esc_html_e( '— wires _gatherpress_person onto all discovered consumers', 'gatherpress-relations' ); ?></li>
+					<li><?php esc_html_e( 'Cast & Crew List block (dynamic, render.php) — works on any post type with the support flag', 'gatherpress-relations' ); ?></li>
+					<li><?php esc_html_e( 'Editor JS uses @wordpress/core-data store to discover post type supports at runtime', 'gatherpress-relations' ); ?></li>
+					<li><?php esc_html_e( 'Graceful degradation: if gatherpress-productions is not active, gatherpress_play features silently skip; if gatherpress-shadow-source is unavailable, blocks show a dependency notice', 'gatherpress-relations' ); ?></li>
+				</ul>
+			</div>
+
+			<div class="gatherpress-relations__phase gatherpress-relations__phase--beta">
+				<h4 class="gatherpress-relations__phase-title"><?php esc_html_e( 'Phase 2 — Beta: People Blocks', 'gatherpress-relations' ); ?></h4>
+				<p class="gatherpress-relations__phase-text"><?php esc_html_e( 'Build the Person Profile Card and Ensemble Grid blocks. Enrich gatherpress_person posts with custom fields (pronouns, external links, ensemble status). Create the single-gatherpress_person.html template with the Person Production Timeline block. Implement transient caching for cross-queries.', 'gatherpress-relations' ); ?></p>
+				<ul class="gatherpress-relations__list">
+					<li><?php esc_html_e( 'Person Profile Card block', 'gatherpress-relations' ); ?></li>
+					<li><?php esc_html_e( 'Ensemble Grid block with frontend filters', 'gatherpress-relations' ); ?></li>
+					<li><?php esc_html_e( 'Person Production Timeline block', 'gatherpress-relations' ); ?></li>
+					<li><?php esc_html_e( 'Transient caching layer with save_post invalidation', 'gatherpress-relations' ); ?></li>
+					<li><code class="gatherpress-relations__inline-code">single-gatherpress_person.html</code> <?php esc_html_e( 'template', 'gatherpress-relations' ); ?></li>
+				</ul>
+			</div>
+
+			<div class="gatherpress-relations__phase gatherpress-relations__phase--ga">
+				<h4 class="gatherpress-relations__phase-title"><?php esc_html_e( 'Phase 3 — GA: Visualization Blocks & REST', 'gatherpress-relations' ); ?></h4>
+				<p class="gatherpress-relations__phase-text"><?php esc_html_e( 'Build the "Where Have You Seen Them?" and enriched "Who\'s In This Show?" blocks. Create custom REST endpoints for person → appearances and consumer → relations queries. Add search/autocomplete for the person ComboboxControl in the editor. Use Shadow_Source::resolve_post_from_query_context() and build_tax_query_clause() in custom Query Loop blocks. All queries use get_post_types_by_support( "gatherpress-relations" ) as the post_type argument.', 'gatherpress-relations' ); ?></p>
+				<ul class="gatherpress-relations__list">
+					<li><code class="gatherpress-relations__inline-code">GET /gatherpress-relations/v1/person/{id}/appearances</code></li>
+					<li><code class="gatherpress-relations__inline-code">GET /gatherpress-relations/v1/consumer/{id}/relations</code></li>
+					<li><?php esc_html_e( '"Where Have You Seen Them?" block', 'gatherpress-relations' ); ?></li>
+					<li><?php esc_html_e( 'Enriched "Who\'s In This Show?" block', 'gatherpress-relations' ); ?></li>
+					<li><?php esc_html_e( 'Shadow_Source utility integration for custom Query Loops', 'gatherpress-relations' ); ?></li>
+				</ul>
+			</div>
+
+			<div class="gatherpress-relations__phase gatherpress-relations__phase--future">
+				<h4 class="gatherpress-relations__phase-title"><?php esc_html_e( 'Phase 4 — Future: Scale & Integrate', 'gatherpress-relations' ); ?></h4>
+				<p class="gatherpress-relations__phase-text"><?php esc_html_e( 'If scale demands it, add the denormalized lookup table (gatherpress_relations_lookup) with dbDelta, backfill from existing _gatherpress_relations meta, and rebuild on save_post. Integrate with GatherPress RSVP data for the "Upcoming for You" recommendation block. Wire additional consumer post types (sessions, workshops) via the same gatherpress_shadow_taxonomy_object_types filter. Add _gatherpress_relations meta on event posts for non-production-specific person connections (organizers, speakers).', 'gatherpress-relations' ); ?></p>
+				<ul class="gatherpress-relations__list">
+					<li><?php esc_html_e( 'Denormalized gatherpress_relations_lookup table + migration script', 'gatherpress-relations' ); ?></li>
+					<li><?php esc_html_e( 'GatherPress RSVP integration hooks', 'gatherpress-relations' ); ?></li>
+					<li><?php esc_html_e( '"Upcoming for You" recommendation block', 'gatherpress-relations' ); ?></li>
+					<li><?php esc_html_e( 'Additional consumer post types wired via filter', 'gatherpress-relations' ); ?></li>
+					<li><code class="gatherpress-relations__inline-code">add_post_type_support( 'gatherpress_event', 'gatherpress-relations' )</code></li>
+				</ul>
+			</div>
+
+			<h4 class="gatherpress-relations__heading"><?php esc_html_e( 'Key Principles Throughout', 'gatherpress-relations' ); ?></h4>
+			<div class="gatherpress-relations__callout gatherpress-relations__callout--key">
+				<p class="gatherpress-relations__callout-title"><?php esc_html_e( 'Guiding Principles', 'gatherpress-relations' ); ?></p>
+				<p class="gatherpress-relations__callout-text">
+					<?php esc_html_e( '1. post_type_supports first — every feature is a named support string (gatherpress-relations). No post type slug is hard-coded in the relationship layer. Any CPT can opt in by declaring the support. Discovery uses get_post_types_by_support(). 2. Shadow-source first — use gatherpress-shadow-source for every entity that needs many-to-many relationships. The shadow taxonomy handles the join; _gatherpress_relations post meta carries per-link attributes. 3. Consume, don\'t own — the gatherpress_play post type is provided by gatherpress-productions. We bridge to it via add_post_type_support, never via register_post_type. 4. Agnostic by default — use filters and the sourcePostType attribute pattern so the same blocks and queries work for theater, events, conferences, and beyond. 5. REST-first — every data relationship should be queryable via the REST API. Use the core data store in JS for post type and supports discovery. 6. Block-first — every UI element is a registered Gutenberg block, not a shortcode or widget. 7. Cache aggressively — transients for cross-queries, object cache for hot paths. 8. Degrade gracefully — if GatherPress or gatherpress-productions is not active, blocks show a fallback message explaining the dependency, not an error. 9. Wire late — all discovery and wiring runs on init:100 to ensure every CPT is already registered.', 'gatherpress-relations' ); ?>
+				</p>
+			</div>
+
+			<h4 class="gatherpress-relations__heading"><?php esc_html_e( 'File Structure', 'gatherpress-relations' ); ?></h4>
+			<div class="gatherpress-relations__code-block">
+				<code class="gatherpress-relations__code">gatherpress-relations/
+├── gatherpress-relations.php      # Plugin bootstrap (Singleton)
+├── includes/
+│   ├── class-post-types.php       # gatherpress_person CPT registration ONLY
+│   │                               # (gatherpress_play is external, from
+│   │                               # gatherpress-productions plugin)
+│   ├── class-supports.php         # Defines &amp; discovers post_type_supports:
+│   │                               #   - gatherpress-relations
+│   │                               #   - (future: gatherpress-ensemble, etc.)
+│   │                               # Uses get_post_types_by_support() on init:100
+│   │                               # to discover consumers and wire shadow taxonomy
+│   │                               # + _gatherpress_relations meta for each
+│   ├── class-bridge.php           # add_post_type_support() calls that bridge
+│   │                               # our features onto external CPTs:
+│   │                               #   - gatherpress_play (gatherpress-productions)
+│   │                               #   - gatherpress_event (GatherPress core)
+│   │                               # Each guarded by post_type_exists()
+│   │                               # Fires on init:15 (before wiring at init:100)
+│   ├── class-meta.php             # Post meta registration (_gatherpress_relations,
+│   │                               # ensemble_status, etc.)
+│   │                               # Driven by supports — meta is registered
+│   │                               # per post type from get_post_types_by_support()
+│   ├── class-rest-endpoints.php   # Custom REST routes for relation queries
+│   │                               # /gatherpress-relations/v1/person/{id}/appearances
+│   │                               # /gatherpress-relations/v1/consumer/{id}/relations
+│   └── class-cache.php            # Transient &amp; object cache helpers
+│                                   # with save_post invalidation hooks
+├── blocks/
+│   ├── cast-crew-list/            # Grouped roster block (render.php)
+│   │   ├── block.json
+│   │   └── src/
+│   │       ├── index.js
+│   │       ├── edit.js            # useEntityProp for _gatherpress_relations meta
+│   │       │                       # uses @wordpress/core-data store for supports
+│   │       ├── render.php         # Shadow term resolution + meta parse
+│   │       │                       # Guards with post_type_supports() check
+│   │       ├── view.js
+│   │       ├── style.scss
+│   │       └── editor.scss
+│   ├── person-profile-card/       # Single person card
+│   ├── ensemble-grid/             # Filterable person grid
+│   ├── person-timeline/           # Chronological production history
+│   ├── where-seen/                # "Where Have You Seen Them?"
+│   └── upcoming-for-you/          # GatherPress RSVP recommendations
+└── templates/
+    ├── single-gatherpress_person.html   # Person detail page
+    # Note: single-gatherpress_play.html is owned by gatherpress-productions.
+    # We do NOT ship a production template — the external plugin owns it.
+    # Our cast-crew-list block is inserted into the production template
+    # by the site editor, not bundled as a default template.</code>
+			</div>
+			<?php
+			return ob_get_clean();
+		}
+	}
+}
+
+/*
+ * Render the block.
+ *
+ * HOW this executes:
+ * WordPress requires this file when it encounters the block delimiter
+ * in post_content. The $attributes array is already populated from
+ * the serialised block comment.
+ *
+ * WHY get_instance()->render()?
+ * The Singleton ensures only one GatherPress_Relations_Renderer
+ * object exists, even if multiple roadmap blocks appear on the page.
+ * Each call to render() receives its own $attributes, so each block
+ * instance can show a different subset of sections.
+ */
+// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- All output is escaped within the renderer methods.
+echo GatherPress_Relations_Renderer::get_instance()->render( $attributes );
+]]></content>
+  </file>
+  <file path="package.json">
+    <description>Package configuration with build scripts. Dependencies are managed at the workspace level via pnpm.</description>
+    <content><![CDATA[
+{
+	"name": "telex-theater-relations",
+	"version": "0.1.0",
+	"description": "A comprehensive architectural roadmap block for connecting persons to theater productions with roles in WordPress — covering data modeling, block design, and scaling strategies.",
+	"author": "WordPress Telex",
+	"license": "GPL-2.0-or-later",
+	"main": "build/index.js",
+	"scripts": {
+		"build": "wp-scripts build",
+		"format": "wp-scripts format",
+		"lint:css": "wp-scripts lint-style",
+		"lint:js": "wp-scripts lint-js",
+		"packages-update": "wp-scripts packages-update",
+		"plugin-zip": "wp-scripts plugin-zip",
+		"start": "wp-scripts start"
+	},
+	"devDependencies": {
+		"@wordpress/scripts": "^30.15.0"
+	}
+}
+]]></content>
+  </file>
+  <file path="gatherpress-relations.php">
+    <content><![CDATA[<?php
+/**
+ * Plugin Name:       GatherPress Relations
+ * Description:       A comprehensive architectural roadmap block documenting best practices for connecting persons to productions with roles in WordPress — powered by GatherPress shadow taxonomies.
+ * Version:           0.1.0
+ * Requires at least: 6.4
+ * Requires PHP:      8.0
+ * Author:            GatherPress
+ * License:           GPLv2 or later
+ * License URI:       https://www.gnu.org/licenses/gpl-2.0.html
+ * Text Domain:       gatherpress-relations
+ *
+ * @package GatherPressRelations
+ */
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit; // Exit if accessed directly.
+}
+
+/**
+ * Class GatherPress_Relations_Plugin
+ *
+ * Singleton entry-point for the GatherPress Relations plugin.
+ *
+ * WHY a Singleton?
+ * ────────────────
+ * WordPress loads every active plugin's main file on every request.
+ * A Singleton guarantees the block is registered exactly once, even if
+ * the file is inadvertently required a second time (e.g. via a
+ * `require_once` in a test harness or another plugin).
+ *
+ * HOW it works:
+ * ─────────────
+ * 1. `get_instance()` is called at the bottom of this file.
+ * 2. On the first call the constructor runs, hooking `register_block`
+ *    into the `init` action at the default priority (10).
+ * 3. When WordPress fires `init`, `register_block()` points
+ *    `register_block_type()` at the compiled `build/` directory,
+ *    which contains the `block.json` manifest and all compiled assets.
+ * 4. Subsequent calls to `get_instance()` return the stored instance
+ *    without re-hooking.
+ *
+ * @since 0.1.0
+ */
+if ( ! class_exists( 'GatherPress_Relations_Plugin' ) ) {
+
+	class GatherPress_Relations_Plugin {
+
+		/**
+		 * Holds the single instance of this class.
+		 *
+		 * WHY nullable static?
+		 * Because PHP needs a class-level slot that persists across calls
+		 * and starts empty so the first call can populate it.
+		 *
+		 * @since 0.1.0
+		 * @var self|null
+		 */
+		private static ?self $instance = null;
+
+		/**
+		 * Returns the singleton instance, creating it on first access.
+		 *
+		 * HOW callers use this:
+		 * ```php
+		 * GatherPress_Relations_Plugin::get_instance();
+		 * ```
+		 *
+		 * @since  0.1.0
+		 * @return self The single plugin instance.
+		 */
+		public static function get_instance(): self {
+			if ( null === self::$instance ) {
+				self::$instance = new self();
+			}
+			return self::$instance;
+		}
+
+		/**
+		 * Constructor — private to enforce Singleton access via get_instance().
+		 *
+		 * WHY private?
+		 * Prevents external code from calling `new GatherPress_Relations_Plugin()`
+		 * and bypassing the single-instance guarantee.
+		 *
+		 * HOW it initialises:
+		 * Hooks `register_block` into `init` so that `register_block_type()`
+		 * runs after WordPress has loaded its block-type infrastructure.
+		 *
+		 * @since 0.1.0
+		 */
+		private function __construct() {
+			add_action( 'init', array( $this, 'register_block' ) );
+		}
+
+		/**
+		 * Registers the block using metadata from the compiled build directory.
+		 *
+		 * WHY __DIR__ . '/build/'?
+		 * `register_block_type()` reads `block.json` from this path to discover
+		 * the block name, attributes, scripts, styles, and the `render` callback
+		 * (render.php). The `build/` directory is produced by `wp-scripts build`
+		 * and contains transpiled JS, compiled CSS, and a copy of block.json.
+		 *
+		 * PAYLOAD (what register_block_type receives):
+		 * ```
+		 * Path: /wp-content/plugins/gatherpress-relations/build/
+		 * Manifest: build/block.json
+		 * Assets:   build/index.js, build/style-index.css, build/view.js, build/render.php
+		 * ```
+		 *
+		 * @since  0.1.0
+		 * @return void
+		 */
+		public function register_block(): void {
+			register_block_type( __DIR__ . '/build/' );
+		}
+	}
+}
+
+/*
+ * Bootstrap the plugin.
+ *
+ * WHY here and not inside a hook?
+ * The Singleton constructor itself defers work to `init`.
+ * Calling get_instance() at include-time simply registers the hook;
+ * no heavy lifting happens until WordPress fires `init`.
+ */
+GatherPress_Relations_Plugin::get_instance();
+]]></content>
+  </file>
+  <file path="README.md">
+    <content><![CDATA[# GatherPress Relations
+
+**Contributors:** GatherPress
+**Tags:** block, roadmap, relations, architecture, shadow-taxonomy
+**Tested up to:** 6.8
+**Stable tag:** 0.1.0
+**License:** GPLv2 or later
+**License URI:** <https://www.gnu.org/licenses/gpl-2.0.html>
+
+A comprehensive architectural roadmap block that documents best practices for connecting persons to productions (or any special post type) with roles in WordPress — powered by GatherPress shadow taxonomies, post meta, and relationship patterns that feel close to core.
+
+## Description
+
+This block renders an interactive, navigable roadmap that answers a critical WordPress architecture question: **How do you connect "persons" to "special posts" with given roles, in a way that is close to WP core, provides the best editor experience, is most flexible, and scales long-term?**
+
+The roadmap is built on a fixed architectural decision: **both people and productions are post types with `gatherpress-shadow-source` support**. This auto-generates hidden shadow taxonomies that power many-to-many relationships — the same primitive GatherPress uses for venue ↔ event tagging. The pattern is fully agnostic and works for any combination of source and consumer post types.
+
+### What the roadmap covers
+
+1. **Data Modeling** — Why both people and productions are post types with shadow-source support, how shadow taxonomies model relationships, and how roles become junction metadata stored as post meta on the consumer.
+2. **Cast & Crew List Block** — A linked roster showing person → role, grouped by department, powered by shadow taxonomy terms and junction meta.
+3. **People / Ensemble Blocks** — Person Profile Card, Ensemble Grid with filters, and Person Production Timeline — all leveraging full post type capabilities (block editor, featured images, templates).
+4. **Smart Data-Relation Visualizations** — "Where Have You Seen Them?", "Who's In This Show?", and recommendation-style "Upcoming for You" blocks using shadow taxonomy queries and `Shadow_Source` utility methods.
+5. **Scaling Strategies** — Caching layers, denormalized lookup tables, and migration paths.
+6. **Implementation Roadmap** — Phased rollout from foundation to GatherPress RSVP integration.
+
+In the editor, the block renders a compact placeholder with the roadmap title and a brief summary. On the frontend, the full roadmap is rendered with collapsible sections, smooth animations, and a sticky table of contents for navigation.
+
+## Installation
+
+1. Upload the plugin files to the `/wp-content/plugins/gatherpress-relations` directory, or install the plugin through the WordPress plugins screen directly.
+2. Activate the plugin through the **Plugins** screen in WordPress.
+3. Insert the **Shadow Taxonomy Relations Roadmap** block into any post or page via the block editor.
+
+## Frequently Asked Questions
+
+### Can I customize the roadmap content?
+
+The roadmap content is authored as a comprehensive architectural reference. You can toggle the visibility of individual sections via the block's Inspector Controls in the editor sidebar.
+
+### Does this block create any custom post types or taxonomies?
+
+No. This block is purely presentational — it documents the architecture. You would implement the described patterns (post types with `gatherpress-shadow-source` support, shadow taxonomy wiring, junction meta) separately in your theme or plugin.
+
+### Is the roadmap content static or dynamic?
+
+The content is server-rendered from structured data in the render callback. The frontend JavaScript adds interactivity (collapsible sections, smooth scrolling, table of contents highlighting) but does not fetch additional data.
+
+## Screenshots
+
+1. The full roadmap rendered on the frontend with collapsible sections and sticky navigation.
+2. The compact editor placeholder showing the roadmap title and section overview.
+
+## Changelog
+
+### 0.1.0
+
+- Initial release with full roadmap content, collapsible sections, and sticky table of contents.
+
+## Architecture
+
+This block is designed as a living architectural document. The patterns described within follow WordPress core conventions, leverage the GatherPress shadow taxonomy primitive, the REST API, and block editor extensibility. While the primary use case is theater ensembles, the architecture is fully agnostic — it applies to event organizers, conference speakers, or any person connected via a specific role to any supporting post type.
+]]></content>
+  </file>
+</artefact>
