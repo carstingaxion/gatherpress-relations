@@ -59,7 +59,7 @@ module.exports = {
 		'blocks/roadmap/index': './src/blocks/roadmap/index.js',
 		'blocks/roadmap/view': './src/blocks/roadmap/view.js',
 		'blocks/cast-crew-list/index': './src/blocks/cast-crew-list/index.js',
-		'blocks/recent-roles/index': './src/blocks/recent-roles/index.js',
+		'blocks/recent-relations/index': './src/blocks/recent-relations/index.js',
 		'plugins/cast-crew-sidebar/index': './src/plugins/cast-crew-sidebar/index.js',
 	},
 

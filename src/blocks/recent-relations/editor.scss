@@ -1,5 +1,5 @@
 /**
- * Editor-only styles for the Person Recent Roles block.
+ * Editor-only styles for the Recent Relations block.
  *
  * Minimal overrides — the shared style.scss handles most of the
  * visual presentation. These styles only adjust editor-specific
@@ -8,7 +8,7 @@
  * @package GatherPressRelations
  */
 
-.wp-block-gatherpress-person-recent-roles {
+.wp-block-gatherpress-recent-relations {
 	/**
 	 * In the editor, the consumer title renders as an <a> to match
 	 * the frontend markup. Prevent actual navigation via onClick

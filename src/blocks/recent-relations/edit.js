@@ -1,31 +1,36 @@
 /**
- * Edit component for the Person Recent Roles block.
+ * Edit component for the Recent Relations block.
  *
  * HOW this component works:
  * ─────────────────────────
- * Intended for placement on a single-gatherpress_person template or
- * inside a Query Loop with gatherpress_person post type. It reads the
- * current person's post slug from block context, derives the shadow
- * term slug, and queries consumer posts tagged with that term to
- * extract role data from their `_gatherpress_relations` meta.
+ * Intended for placement on a single template for any source post
+ * type (gatherpress_person, gatherpress_sponsor, etc.) or inside a
+ * Query Loop with a source post type. It reads the current post's
+ * slug from block context, derives the shadow term slug, and queries
+ * consumer posts tagged with that term to extract role data from
+ * their `_gatherpress_relations` meta.
+ *
+ * All labels are context-aware — they use the registered singular
+ * and plural labels for the current post type and for the referenced
+ * consumer ("relate-from") post types.
  *
  * DATA FLOW (editor preview):
- * 1. Get the current person post from block context (postId).
- * 2. Read the person's slug via getEntityRecord.
- * 3. Derive shadow slug: `_<person_slug>`.
- * 4. Look up the shadow term ID in `_gatherpress_person` taxonomy.
+ * 1. Get the current source post from block context (postId).
+ * 2. Read the post's slug via getEntityRecord.
+ * 3. Derive shadow slug: `_<post_slug>`.
+ * 4. Look up the shadow term in the `_<post_type>` taxonomy.
  * 5. Discover the taxonomy's REST base from the taxonomy entity.
  * 6. Discover consumer post types (those with `gatherpress-relations-from`
  *    support) via useConsumerTypes hook.
  * 7. For each consumer type, query posts tagged with the shadow term.
  * 8. Parse _gatherpress_relations meta from each consumer post.
- * 9. Filter entries matching the current person's shadow slug.
- * 10. Render a preview list of role → production pairs.
+ * 9. Filter entries matching the current post's shadow slug.
+ * 10. Render a preview list of role → consumer post pairs.
  *
  * @package GatherPressRelations
  */
 
-import { __ } from '@wordpress/i18n';
+import { __, sprintf } from '@wordpress/i18n';
 import { useBlockProps, InspectorControls } from '@wordpress/block-editor';
 import {
 	PanelBody,
@@ -37,7 +42,7 @@ import {
 } from '@wordpress/components';
 import { useSelect } from '@wordpress/data';
 import { store as coreStore } from '@wordpress/core-data';
-import { useState, useEffect } from '@wordpress/element';
+import { useState, useEffect, useMemo } from '@wordpress/element';
 import apiFetch from '@wordpress/api-fetch';
 import { addQueryArgs } from '@wordpress/url';
 
@@ -47,10 +52,9 @@ import { getDepartmentLabel } from '../../utils/departments';
 import { getDefaultSourceType, getShadowTaxonomyForSource } from '../../utils/source-types';
 import { useConsumerTypes } from '../../hooks/use-consumer-types';
 import { formatRoleDate } from '../../utils/format-role-date';
-import { useMemo } from '@wordpress/element';
 
 /**
- * Editor UI for the Person Recent Roles block.
+ * Editor UI for the Recent Relations block.
  *
  * @param {Object}   props               - Block props from the editor.
  * @param {Object}   props.attributes    - Block attributes.
@@ -70,7 +74,30 @@ export default function Edit( { attributes, setAttributes, context } ) {
 	const [ hasLoaded, setHasLoaded ] = useState( false );
 
 	/**
-	 * Step 1: Resolve the person post's slug from block context.
+	 * Resolve the current post type's labels for context-aware strings.
+	 *
+	 * WHY useSelect for post type labels?
+	 * The block title, placeholder text, and empty-state messaging
+	 * should reflect the actual post type the block sits on (e.g.,
+	 * "Person", "Sponsor") rather than a hardcoded "Person".
+	 */
+	const { currentTypeLabels } = useSelect(
+		( select ) => {
+			if ( ! postType ) {
+				return { currentTypeLabels: null };
+			}
+			const typeObj = select( coreStore ).getPostType( postType );
+			return {
+				currentTypeLabels: typeObj?.labels || null,
+			};
+		},
+		[ postType ]
+	);
+
+	const singularLabel = currentTypeLabels?.singular_name || __( 'Post', 'gatherpress-relations' );
+
+	/**
+	 * Step 1: Resolve the source post's slug from block context.
 	 */
 	const { personSlug, isResolvingPerson } = useSelect(
 		( select ) => {
@@ -78,18 +105,18 @@ export default function Edit( { attributes, setAttributes, context } ) {
 				return { personSlug: null, isResolvingPerson: false };
 			}
 
-			const personPost = select( coreStore ).getEntityRecord(
+			const sourcePost = select( coreStore ).getEntityRecord(
 				'postType',
 				postType || 'gatherpress_person',
 				postId
 			);
 
-			if ( ! personPost ) {
+			if ( ! sourcePost ) {
 				return { personSlug: null, isResolvingPerson: true };
 			}
 
 			return {
-				personSlug: personPost.slug,
+				personSlug: sourcePost.slug,
 				isResolvingPerson: false,
 			};
 		},
@@ -99,12 +126,7 @@ export default function Edit( { attributes, setAttributes, context } ) {
 	const shadowSlug = personSlug ? '_' + personSlug : null;
 
 	/*
-	 * Derive the shadow taxonomy from the person's post type.
-	 *
-	 * WHY dynamic?
-	 * The block may be placed on a template for any source type
-	 * (gatherpress_person, gatherpress_sponsor, etc.). The shadow
-	 * taxonomy is always `_<post_type>`.
+	 * Derive the shadow taxonomy from the source post's type.
 	 */
 	const shadowTaxonomy = postType ? '_' + postType : '_gatherpress_person';
 
@@ -158,9 +180,7 @@ export default function Edit( { attributes, setAttributes, context } ) {
 
 	/**
 	 * Build the list of consumer types to query, respecting the
-	 * filterPostType attribute. When set to a non-empty string,
-	 * only that post type is queried. Otherwise all consumers are
-	 * queried (the "All" default).
+	 * filterPostType attribute.
 	 *
 	 * @type {Object[]}
 	 */
@@ -262,14 +282,6 @@ export default function Edit( { attributes, setAttributes, context } ) {
 						);
 
 						personEntries.forEach( ( entry ) => {
-							/*
-							 * Resolve display date: if the consumer
-							 * post type supports gatherpress-event-date,
-							 * use the `gatherpress_datetime_start` meta
-							 * (a plain datetime string like
-							 * "2023-06-05 18:00:00") instead of the
-							 * post's published date.
-							 */
 							let displayDate = post.date;
 							if ( isEventDateSupported ) {
 								const eventStart =
@@ -403,6 +415,18 @@ export default function Edit( { attributes, setAttributes, context } ) {
 		);
 	}
 
+	/*
+	 * Context-aware block title for placeholders.
+	 *
+	 * Uses the current post type's singular label to produce titles
+	 * like "Person Recent Relations" or "Sponsor Recent Relations".
+	 */
+	const blockTitle = sprintf(
+		/* translators: %s: singular post type label (e.g., "Person", "Sponsor") */
+		__( '%s Recent Relations', 'gatherpress-relations' ),
+		singularLabel
+	);
+
 	return (
 		<>
 			<InspectorControls>
@@ -435,7 +459,7 @@ export default function Edit( { attributes, setAttributes, context } ) {
 					<RangeControl
 						__nextHasNoMarginBottom
 						label={ __(
-							'Maximum roles',
+							'Maximum entries',
 							'gatherpress-relations'
 						) }
 						value={ attributes.maxRoles }
@@ -473,9 +497,10 @@ export default function Edit( { attributes, setAttributes, context } ) {
 							'Show post type label',
 							'gatherpress-relations'
 						) }
-						help={ __(
-							'Displays "Production", "Event", etc. next to each role.',
-							'gatherpress-relations'
+						help={ sprintf(
+							/* translators: %s: example consumer type labels */
+							__( 'Displays the consumer post type label (e.g., %s) next to each entry.', 'gatherpress-relations' ),
+							resolvedConsumerTypes.slice( 0, 2 ).map( ( t ) => t.labels?.singular_name || t.name ).join( ', ' ) || __( 'Event, Production', 'gatherpress-relations' )
 						) }
 						checked={ attributes.showPostType }
 						onChange={ ( val ) =>
@@ -536,13 +561,11 @@ export default function Edit( { attributes, setAttributes, context } ) {
 				{ ! postId && (
 					<Placeholder
 						icon="id-alt"
-						label={ __(
-							'Person Recent Roles',
-							'gatherpress-relations'
-						) }
-						instructions={ __(
-							'This block requires a person post context. Place it on a single-gatherpress_person template or inside a Query Loop querying gatherpress_person posts.',
-							'gatherpress-relations'
+						label={ __( 'Recent Relations', 'gatherpress-relations' ) }
+						instructions={ sprintf(
+							/* translators: %s: post type slug */
+							__( 'This block requires a post context with gatherpress-relations-to support. Place it on a single template or inside a Query Loop for a supported post type.', 'gatherpress-relations' ),
+							postType || ''
 						) }
 					/>
 				) }
@@ -552,7 +575,7 @@ export default function Edit( { attributes, setAttributes, context } ) {
 						<Spinner />
 						<p>
 							{ __(
-								'Loading roles…',
+								'Loading relations…',
 								'gatherpress-relations'
 							) }
 						</p>
@@ -562,13 +585,11 @@ export default function Edit( { attributes, setAttributes, context } ) {
 				{ postId && ! isLoading && roles.length === 0 && (
 					<Placeholder
 						icon="id-alt"
-						label={ __(
-							'Person Recent Roles',
-							'gatherpress-relations'
-						) }
-						instructions={ __(
-							'No roles found for this person. Assign them to productions or events via the Cast & Crew List block.',
-							'gatherpress-relations'
+						label={ blockTitle }
+						instructions={ sprintf(
+							/* translators: %s: singular post type label (e.g., "person", "sponsor") */
+							__( 'No relations found for this %s. Assign them to consumer posts via the Cast & Crew sidebar panel.', 'gatherpress-relations' ),
+							singularLabel.toLowerCase()
 						) }
 					/>
 				) }

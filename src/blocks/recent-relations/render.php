@@ -1,6 +1,6 @@
 <?php
 /**
- * Server-side render callback for the Person Recent Roles block.
+ * Server-side render callback for the Recent Relations block.
  *
  * HOW this file is invoked:
  * ─────────────────────────
@@ -52,7 +52,7 @@ if ( ! class_exists( 'GatherPress_Relations_Recent_Roles_Renderer' ) ) {
 	/**
 	 * Class GatherPress_Relations_Recent_Roles_Renderer
 	 *
-	 * Singleton that produces the Person Recent Roles block HTML.
+	 * Singleton that produces the Recent Relations block HTML.
 	 *
 	 * @since 0.1.0
 	 */

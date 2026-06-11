@@ -1,12 +1,12 @@
 {
   "$schema": "https://schemas.wp.org/trunk/block.json",
   "apiVersion": 3,
-  "name": "gatherpress/person-recent-roles",
+  "name": "gatherpress/recent-relations",
   "version": "0.1.0",
-  "title": "Person Recent Roles",
+  "title": "Recent Relations",
   "category": "widgets",
   "icon": "id-alt",
-  "description": "Displays a list of recent roles a person has held across productions and events, with each role linking to its consumer post page. Reads junction metadata from _gatherpress_relations on consumer posts tagged with the current person's shadow term.",
+  "description": "Displays a list of recent relations this post has across connected consumer posts, with each entry linking to its consumer post page. Reads junction metadata from _gatherpress_relations on consumer posts tagged with the current post's shadow term.",
   "attributes": {
     "maxRoles": {
       "type": "number",

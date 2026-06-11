@@ -1,5 +1,5 @@
 /**
- * Shared styles for the Person Recent Roles block.
+ * Shared styles for the Recent Relations block.
  *
  * Applied in both editor and frontend contexts via block.json's
  * `style` asset. Uses BEM naming with `recent-roles` as the block name.
@@ -19,7 +19,7 @@
  * @package GatherPressRelations
  */
 
-.wp-block-gatherpress-person-recent-roles {
+.wp-block-gatherpress-recent-relations {
 	max-width: 100%;
 	line-height: 1.5;
 	container-type: inline-size;

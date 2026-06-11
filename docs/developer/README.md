@@ -420,9 +420,9 @@ src/blocks/cast-crew-list/
 
 ---
 
-## Person Recent Roles Block (Phase 2)
+## Recent Relations Block (Phase 2)
 
-The `gatherpress/person-recent-roles` block is a dynamic block that renders a list of recent roles a person has held across productions and events.
+The `gatherpress/recent-relations` block is a dynamic block that renders a list of recent relations a source post has across connected consumer posts. All labels are context-aware — they use the registered singular/plural labels for the current post type and for the referenced consumer post types.
 
 ### Block Attributes
 
@@ -437,37 +437,38 @@ The `gatherpress/person-recent-roles` block is a dynamic block that renders a li
 
 ### Block Context
 
-The block uses `postId` and `postType` from block context, making it work correctly inside Query Loops iterating over `gatherpress_person` posts.
+The block uses `postId` and `postType` from block context, making it work correctly inside Query Loops iterating over any source post type (gatherpress_person, gatherpress_sponsor, etc.).
 
 ### Data Flow
 
 1. Resolves the current person post from block context (`postId`).
-2. Derives the shadow term slug: `_<person_post_name>`.
-3. Looks up the shadow term in the `_gatherpress_person` taxonomy.
+2. Derives the shadow term slug: `_<post_name>`.
+3. Looks up the shadow term in the `_<post_type>` shadow taxonomy.
 4. Uses `get_post_types_by_support( 'gatherpress-relations-from' )` to discover all consumer post types — no slug is hard-coded.
-5. Queries consumer posts via `WP_Query` with a `tax_query` on `_gatherpress_person`.
-6. For each consumer post, parses `_gatherpress_relations` meta and filters entries matching the current person's shadow slug.
+5. Queries consumer posts via `WP_Query` with a `tax_query` on the shadow taxonomy.
+6. For each consumer post, parses `_gatherpress_relations` meta and filters entries matching the current post's shadow slug.
 7. Sorts results by consumer post date (descending) and caps at `maxRoles`.
 8. Renders a semantic list with linked production titles, role names, department badges, and dates.
 
 ### Editor Experience
 
 The editor preview queries the same data via the core data store:
-- Fetches the person post's slug from `getEntityRecord`.
-- Looks up the shadow term via `getEntityRecords` on the `_gatherpress_person` taxonomy.
+- Fetches the source post's slug from `getEntityRecord`.
+- Looks up the shadow term via `getEntityRecords` on the `_<post_type>` taxonomy.
 - Discovers consumer post types via `getPostTypes` filtered by `gatherpress-relations-from` support.
 - Queries consumer posts for each type with the shadow term filter.
 - Parses `_gatherpress_relations` meta from each consumer post's `meta` REST field.
+- All placeholder labels use `sprintf` with the current post type's registered labels.
 
 InspectorControls provide toggles for department badges, grouping, post type labels, date display, and date format.
 
 ### File Structure
 
 ```
-src/blocks/recent-roles/
-├── block.json      # Block metadata, attributes, context, assets
+src/blocks/recent-roles/        # Source directory (builds to build/blocks/recent-relations/)
+├── block.json      # Block metadata (name: gatherpress/recent-relations)
 ├── index.js        # Block registration
-├── edit.js         # Editor component with live preview
+├── edit.js         # Editor component with context-aware labels
 ├── render.php      # Server-side rendering with Singleton renderer
 ├── style.scss      # Shared styles (editor + frontend)
 └── editor.scss     # Editor-only style overrides

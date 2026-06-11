@@ -20,7 +20,7 @@ GatherPress Relations registers a `gatherpress_person` post type and a relations
 The plugin ships two blocks and a sidebar panel:
 
 - **Cast & Crew List** — renders a grouped roster of people connected to the current post, with headshots, names, roles, and links to person pages. Three style variations: simple list (default), compact table, and cards.
-- **Person Recent Roles** — displays a person's recent roles across all connected posts, with linked titles, department badges, and dates. Place it on a person template to show their full history.
+- **Recent Relations** — displays a source post's recent relations across all connected consumer posts, with linked titles, department badges, and dates. Place it on a person or sponsor template to show their full history. Labels adapt to the current post type.
 - **Manage Cast & Crew sidebar** — available on every supporting post type, even when no block is inserted. Search for people, assign roles and departments, reorder entries.
 
 ### Example: WordPress meetup group
@@ -30,7 +30,7 @@ A meetup group uses GatherPress for events. With this plugin:
 1. Create person posts for your regular contributors.
 2. On each event, open the **Cast & Crew** sidebar panel and assign people with roles like *Speaker*, *Moderation*, or *Host*.
 3. The Cast & Crew List block on the event page shows who's involved and in what capacity.
-4. On a person's page, the Recent Roles block lists every event they've participated in, with their role at each.
+4. On a person's page, the Recent Relations block lists every event they've participated in, with their role at each.
 
 The default departments reflect this use case: **Speaker**, **Moderation**, and **Host**. Departments are filterable — theater groups, conferences, or any other domain can customise them via the `gatherpress_relations_departments` filter.
 

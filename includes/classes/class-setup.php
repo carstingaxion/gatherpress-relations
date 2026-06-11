@@ -99,7 +99,7 @@ class Setup {
 
 		register_block_type( $plugin_dir . '/build/blocks/roadmap/' );
 		register_block_type( $plugin_dir . '/build/blocks/cast-crew-list/' );
-		register_block_type( $plugin_dir . '/build/blocks/recent-roles/' );
+		register_block_type( $plugin_dir . '/build/blocks/recent-relations/' );
 
 		$this->register_cast_crew_block_styles();
 	}

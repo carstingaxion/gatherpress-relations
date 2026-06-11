@@ -336,14 +336,14 @@ foreach ( $person_ids as $person_slug => $pid ) {
 	$current_content = $person_post->post_content ?? '';
 
 	// Skip if the block is already present (idempotency).
-	if ( false !== strpos( $current_content, 'wp:gatherpress/person-recent-roles' ) ) {
+	if ( false !== strpos( $current_content, 'wp:gatherpress/recent-relations' ) ) {
 		continue;
 	}
 
 	$block_markup = '<!-- wp:heading {"level":3} -->' . "\n"
-		. '<h3 class="wp-block-heading">Recent Roles</h3>' . "\n"
+		. '<h3 class="wp-block-heading">Recent Relations</h3>' . "\n"
 		. '<!-- /wp:heading -->' . "\n\n"
-		. '<!-- wp:gatherpress/person-recent-roles {"maxRoles":20,"showDepartment":true,"showDate":true,"dateFormat":"M Y"} /-->';
+		. '<!-- wp:gatherpress/recent-relations {"maxRoles":20,"showDepartment":true,"showDate":true,"dateFormat":"M Y"} /-->';
 
 	wp_update_post(
 		array(
