@@ -41,15 +41,11 @@
     {
       "step": "installPlugin",
       "pluginData": {
-        "resource": "git:directory",
-        "url": "https://github.com/carstingaxion/gatherpress-relations",
-        "ref": "HEAD"
+          "resource": "url",
+          "url": "https://github.com/carstingaxion/gatherpress-relations/releases/latest/download/gatherpress-relations.zip"
       },
       "options": {
-        "activate": true
-      },
-      "progress": {
-        "caption": "Installing plugin from GitHub: carstingaxion/gatherpress-relations"
+          "activate": true
       }
     },
     {
