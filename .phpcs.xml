@@ -6,6 +6,7 @@
 	<arg name="basepath" value="./"/><!-- Strip the file paths down to the relevant bit -->
 
 	<exclude-pattern>*/build/*</exclude-pattern>
+	<exclude-pattern>*/src/blocks/roadmap/*</exclude-pattern>
 	<exclude-pattern>*/vendor/*</exclude-pattern>
 	<exclude-pattern>*/.wordpress-org/*</exclude-pattern>
 

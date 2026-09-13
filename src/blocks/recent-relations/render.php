@@ -230,8 +230,7 @@ if ( ! class_exists( 'GatherPress_Relations_Recent_Roles_Renderer' ) ) {
 
 			/*
 			 * Step 3: Look up the shadow term.
-			 */
-			/*
+			 *
 			 * Resolve the shadow taxonomy for this person's post type.
 			 *
 			 * WHY dynamic instead of hardcoding '_gatherpress_person'?
@@ -241,8 +240,8 @@ if ( ! class_exists( 'GatherPress_Relations_Recent_Roles_Renderer' ) ) {
 			 * the taxonomy from the block context's postType, falling
 			 * back to `_gatherpress_person` for backward compatibility.
 			 */
-			$source_post_type    = $person_post->post_type;
-			$shadow_taxonomy     = '_' . $source_post_type;
+			$source_post_type = $person_post->post_type;
+			$shadow_taxonomy  = '_' . $source_post_type;
 
 			if ( ! taxonomy_exists( $shadow_taxonomy ) ) {
 				return '';
@@ -257,14 +256,14 @@ if ( ! class_exists( 'GatherPress_Relations_Recent_Roles_Renderer' ) ) {
 			/*
 			 * Step 4: Discover consumer post types.
 			 *
-			 		 * WHY get_post_types_by_support?
-		 * This is the canonical, slug-agnostic way to find all
-		 * post types that have opted into the relations system.
-		 * No post type slug is hard-coded.
-		 *
-		 * If the `filterPostType` attribute is set to a non-empty
-		 * string, only that specific post type is queried — provided
-		 * it actually supports `gatherpress-relations-from`. This gives
+					 * WHY get_post_types_by_support?
+			* This is the canonical, slug-agnostic way to find all
+			* post types that have opted into the relations system.
+			* No post type slug is hard-coded.
+			*
+			* If the `filterPostType` attribute is set to a non-empty
+			* string, only that specific post type is queried — provided
+			* it actually supports `gatherpress-relations-from`. This gives
 			 * editors a way to scope the roles list to a single consumer
 			 * type (e.g., only productions, only events).
 			 */
@@ -325,18 +324,19 @@ if ( ! class_exists( 'GatherPress_Relations_Recent_Roles_Renderer' ) ) {
 
 			foreach ( $query->posts as $consumer_post ) {
 				$raw_meta  = get_post_meta( $consumer_post->ID, '_gatherpress_relations', true );
-				$relations = json_decode( $raw_meta ?: '[]', true );
+				$raw_meta  = $raw_meta ? $raw_meta : '[]';
+				$relations = json_decode( $raw_meta, true );
 
 				if ( ! is_array( $relations ) ) {
 					continue;
 				}
 
 							$person_entries = array_filter(
-				$relations,
-				function ( array $entry ) use ( $shadow_slug ): bool {
-					return ( $entry['slug'] ?? '' ) === $shadow_slug;
-				}
-			);
+								$relations,
+								function ( array $entry ) use ( $shadow_slug ): bool {
+									return ( $entry['slug'] ?? '' ) === $shadow_slug;
+								}
+							);
 
 				$post_type_obj = get_post_type_object( $consumer_post->post_type );
 
@@ -347,19 +347,19 @@ if ( ! class_exists( 'GatherPress_Relations_Recent_Roles_Renderer' ) ) {
 				 */
 				$display_date = $this->resolve_consumer_date( $consumer_post );
 
-							foreach ( $person_entries as $entry ) {
-				$roles[] = array(
-					'consumer_id'         => $consumer_post->ID,
-					'consumer_title'      => get_the_title( $consumer_post ),
-					'consumer_permalink'  => get_permalink( $consumer_post ),
-					'consumer_type'       => $consumer_post->post_type,
-					'consumer_type_label' => $post_type_obj ? $post_type_obj->labels->singular_name : $consumer_post->post_type,
-					'consumer_date'       => $display_date,
-					'role'                => $entry['role'] ?? '',
-					'department'          => $entry['department'] ?? 'other',
-					'order'               => $entry['order'] ?? 99,
-					'source_type'         => $entry['type'] ?? $source_post_type,
-				);
+				foreach ( $person_entries as $entry ) {
+					$roles[] = array(
+						'consumer_id'         => $consumer_post->ID,
+						'consumer_title'      => get_the_title( $consumer_post ),
+						'consumer_permalink'  => get_permalink( $consumer_post ),
+						'consumer_type'       => $consumer_post->post_type,
+						'consumer_type_label' => $post_type_obj ? $post_type_obj->labels->singular_name : $consumer_post->post_type,
+						'consumer_date'       => $display_date,
+						'role'                => $entry['role'] ?? '',
+						'department'          => $entry['department'] ?? 'other',
+						'order'               => $entry['order'] ?? 99,
+						'source_type'         => $entry['type'] ?? $source_post_type,
+					);
 				}
 			}
 
@@ -382,11 +382,12 @@ if ( ! class_exists( 'GatherPress_Relations_Recent_Roles_Renderer' ) ) {
 			/*
 			 * Step 7: Render.
 			 */
-			$show_department    = ! empty( $attributes['showDepartment'] );
-			$group_by_dept      = ! empty( $attributes['groupByDepartment'] );
-			$show_post_type     = ! empty( $attributes['showPostType'] );
-			$show_date          = ! empty( $attributes['showDate'] );
-			$date_format        = $attributes['dateFormat'] ?? 'Y';
+			$show_department = ! empty( $attributes['showDepartment'] );
+			$group_by_dept   = ! empty( $attributes['groupByDepartment'] );
+			$show_post_type  = ! empty( $attributes['showPostType'] );
+			$show_date       = ! empty( $attributes['showDate'] );
+			$date_format     = $attributes['dateFormat'] ?? 'Y';
+
 			/*
 			 * Use the source post type for departments config at the block
 			 * level. Since the recent-roles block is placed on a source
@@ -503,8 +504,8 @@ if ( ! class_exists( 'GatherPress_Relations_Recent_Roles_Renderer' ) ) {
 			 */
 			$source_type_for_dept = $role['source_type'] ?? 'gatherpress_person';
 			$departments_config   = $this->get_departments( $source_type_for_dept );
-			$dept_label         = $departments_config[ $role['department'] ] ?? ucfirst( $role['department'] );
-			$formatted_date     = $show_date ? $this->format_date( $role['consumer_date'], $date_format ) : '';
+			$dept_label           = $departments_config[ $role['department'] ] ?? ucfirst( $role['department'] );
+			$formatted_date       = $show_date ? $this->format_date( $role['consumer_date'], $date_format ) : '';
 			?>
 			<li class="recent-roles__item">
 				<div class="recent-roles__item-main">

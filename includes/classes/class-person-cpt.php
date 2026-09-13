@@ -35,6 +35,14 @@ use GatherPress\Core\Traits\Singleton;
 // Exit if accessed directly.
 defined( 'ABSPATH' ) || exit; // @codeCoverageIgnore
 
+/**
+ * Class Person_CPT
+ *
+ * Singleton that registers the gatherpress_person post type.
+ *
+ * @since   0.1.0
+ * @package GatherPressRelations
+ */
 class Person_CPT {
 	use Singleton;
 
@@ -103,12 +111,17 @@ class Person_CPT {
 			return;
 		}
 
-		add_filter( 'gatherpress_shadow_taxonomy_args', function ( array $args, string $post_type ): array {
-			if ( self::POST_TYPE === $post_type ) {
-				$args['show_in_quick_edit'] = false;
-			}
-			return $args;
-		}, 10, 2 );
+		add_filter(
+			'gatherpress_shadow_taxonomy_args',
+			function ( array $args, string $post_type ): array {
+				if ( self::POST_TYPE === $post_type ) {
+					$args['show_in_quick_edit'] = false;
+				}
+				return $args;
+			},
+			10,
+			2 
+		);
 
 		register_post_type(
 			self::POST_TYPE,

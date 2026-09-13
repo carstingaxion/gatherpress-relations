@@ -26,6 +26,14 @@ use GatherPress\Core\Traits\Singleton;
 // Exit if accessed directly.
 defined( 'ABSPATH' ) || exit; // @codeCoverageIgnore
 
+/**
+ * Class Setup
+ *
+ * Singleton entry-point for the GatherPress Relations plugin.
+ *
+ * @since   0.1.0
+ * @package GatherPressRelations
+ */
 class Setup {
 	use Singleton;
 
@@ -418,7 +426,7 @@ class Setup {
 
 		$asset_file = $plugin_dir . '/build/plugins/cast-crew-sidebar/index.asset.php';
 		$asset      = file_exists( $asset_file )
-			? require $asset_file
+			? require $asset_file // phpcs:ignore WordPressVIPMinimum.Files.IncludingFile.UsingVariable
 			: array(
 				'dependencies' => array(),
 				'version'      => GATHERPRESS_RELATIONS_VERSION,
@@ -506,8 +514,8 @@ class Setup {
 		 * holds regardless of whether the consumer is an event, a
 		 * production, or any other post type.
 		 */
-		$source_slugs_for_depts    = get_post_types_by_support( Wiring::SUPPORT_KEY_TO );
-		$departments_by_post_type  = array();
+		$source_slugs_for_depts   = get_post_types_by_support( Wiring::SUPPORT_KEY_TO );
+		$departments_by_post_type = array();
 
 		foreach ( $source_slugs_for_depts as $source_slug_dept ) {
 			$type_departments = apply_filters( 'gatherpress_relations_departments', $default_departments, $source_slug_dept );
@@ -548,10 +556,10 @@ class Setup {
 				continue;
 			}
 			$source_types[] = array(
-				'slug'            => $source_slug,
-				'shadowTaxonomy'  => '_' . $source_slug,
-				'label'           => $pt_obj->labels->name ?? $source_slug,
-				'singularLabel'   => $pt_obj->labels->singular_name ?? $source_slug,
+				'slug'           => $source_slug,
+				'shadowTaxonomy' => '_' . $source_slug,
+				'label'          => $pt_obj->labels->name ?? $source_slug,
+				'singularLabel'  => $pt_obj->labels->singular_name ?? $source_slug,
 			);
 		}
 
@@ -559,12 +567,10 @@ class Setup {
 			'gatherpress-relations-cast-crew-sidebar',
 			'gatherPressRelationsConfig',
 			array(
-				'departments'          => $options,
+				'departments'           => $options,
 				'departmentsByPostType' => $departments_by_post_type,
-				'sourceTypes'          => $source_types,
+				'sourceTypes'           => $source_types,
 			)
 		);
 	}
-
-
 }
