@@ -2,7 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased](https://github.com/carstingaxion/gatherpress-relations/compare/0.1.0...HEAD)
+## [Unreleased](https://github.com/carstingaxion/gatherpress-relations/compare/0.1.1...HEAD)
+
+## [0.1.1](https://github.com/carstingaxion/gatherpress-relations/compare/0.1.0...0.1.1) - 2026-09-13
+
+### 🐛 Fixed
+
+- Define with_front for the rewrite settings of the person cpt (fixes #30) ([#31](https://github.com/carstingaxion/gatherpress-relations/pull/31))
 
 ## [0.1.0](https://github.com/carstingaxion/gatherpress-relations/compare/0.1.0...0.1.0) - 2026-06-11
 
