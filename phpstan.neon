@@ -7,7 +7,7 @@ parameters:
         - includes/classes
         - plugin.php
     scanDirectories:
-        - ../gatherpress
+        - wp-content/plugins/gatherpress
     excludePaths:
         analyse:
             - vendor/
