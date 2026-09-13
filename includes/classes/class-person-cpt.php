@@ -139,7 +139,13 @@ class Person_CPT {
 					'custom-fields',
 					'gatherpress-shadow-source',
 				),
-				'rewrite'      => array( 'slug' => 'person' ),
+				'rewrite'      => array(
+					'slug'       => 'person',
+					'with_front' => false,      // Defaults to true.
+					// 'feeds'   => false,      // Defaults to 'has_archive'.
+					// 'pages'   => false,      // Defaults to true.
+					// 'ep_mask' => 'EP_NONE',  // Defaults to EP_PERMALINK.
+				),
 			)
 		);
 
