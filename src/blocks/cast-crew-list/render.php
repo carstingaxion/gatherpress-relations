@@ -148,33 +148,34 @@ if ( ! class_exists( 'GatherPress_Relations_Cast_Crew_Renderer' ) ) {
 			 * making array_filter and usort callbacks cleaner.
 			 */
 			$raw_meta  = get_post_meta( $post_id, '_gatherpress_relations', true );
-			$relations = json_decode( $raw_meta ?: '[]', true );
+			$raw_meta  = $raw_meta ? $raw_meta : '[]';
+			$relations = json_decode( $raw_meta, true );
 
 			if ( ! is_array( $relations ) || empty( $relations ) ) {
 				return '';
 			}
 
 			/*
-			 		 * Filter by sourcePostType attribute.
-		 *
-		 * HOW this works:
-		 * When the editor selects a specific source post type (e.g.,
-		 * 'gatherpress_person'), only entries whose `type` field
-		 * matches are rendered. Entries without the field default to
-		 * 'gatherpress_person' for backward compatibility. When the
-		 * attribute is empty or 'all', no filtering occurs.
-		 */
-		$source_post_type = $attributes['sourcePostType'] ?? '';
-		if ( ! empty( $source_post_type ) && 'all' !== $source_post_type ) {
-			$relations = array_values(
-				array_filter(
-					$relations,
-					function ( array $entry ) use ( $source_post_type ): bool {
-						$entry_source = $entry['type'] ?? 'gatherpress_person';
-						return $entry_source === $source_post_type;
-					}
-				)
-			);
+					 * Filter by sourcePostType attribute.
+			*
+			* HOW this works:
+			* When the editor selects a specific source post type (e.g.,
+			* 'gatherpress_person'), only entries whose `type` field
+			* matches are rendered. Entries without the field default to
+			* 'gatherpress_person' for backward compatibility. When the
+			* attribute is empty or 'all', no filtering occurs.
+			*/
+			$source_post_type = $attributes['sourcePostType'] ?? '';
+			if ( ! empty( $source_post_type ) && 'all' !== $source_post_type ) {
+				$relations = array_values(
+					array_filter(
+						$relations,
+						function ( array $entry ) use ( $source_post_type ): bool {
+							$entry_source = $entry['type'] ?? 'gatherpress_person';
+							return $entry_source === $source_post_type;
+						}
+					)
+				);
 
 				if ( empty( $relations ) ) {
 					return '';
@@ -193,23 +194,22 @@ if ( ! class_exists( 'GatherPress_Relations_Cast_Crew_Renderer' ) ) {
 				$grouped[ $dept ][] = $entry;
 			}
 
-					/*
-		 * Step 3: Sort each department by order.
-		 */
-		foreach ( $grouped as &$members ) {
-			usort(
-				$members,
-				function ( array $a, array $b ): int {
-					return ( $a['order'] ?? 99 ) <=> ( $b['order'] ?? 99 );
-				}
-			);
-		}
+			/*
+			* Step 3: Sort each department by order.
+			*/
+			foreach ( $grouped as &$members ) {
+				usort(
+					$members,
+					function ( array $a, array $b ): int {
+						return ( $a['order'] ?? 99 ) <=> ( $b['order'] ?? 99 );
+					}
+				);
+			}
 			unset( $members );
 
 			/*
 			 * Step 4: Render using the department display order.
-			 */
-			/*
+			 *
 			 * Resolve the source post type for department configuration.
 			 *
 			 * WHY source type, not consumer type?
@@ -228,7 +228,7 @@ if ( ! class_exists( 'GatherPress_Relations_Cast_Crew_Renderer' ) ) {
 				// Use the first entry's type as the representative source type.
 				$dept_source_type = $relations[0]['type'] ?? 'gatherpress_person';
 			}
-			$departments = $this->get_departments( $dept_source_type );
+			$departments    = $this->get_departments( $dept_source_type );
 			$show_headshots = ! empty( $attributes['showHeadshots'] );
 			$headshot_size  = $attributes['headShotSize'] ?? 'thumbnail';
 			$show_headings  = ! empty( $attributes['showDepartmentHeadings'] );
@@ -311,13 +311,13 @@ if ( ! class_exists( 'GatherPress_Relations_Cast_Crew_Renderer' ) ) {
 									 */
 									$fallback_avatar_url = '';
 									if ( $show_headshots && ! $headshot_url ) {
-										$avatar_default = get_option( 'avatar_default', 'mystery' );
-										$headshot_px    = 'medium' === $headshot_size ? 300 : 150;
+										$avatar_default      = get_option( 'avatar_default', 'mystery' );
+										$headshot_px         = 'medium' === $headshot_size ? 300 : 150;
 										$fallback_avatar_url = get_avatar_url(
 											'person-' . $person_post_id . '@placeholder.invalid',
 											array(
-												'size'          => $headshot_px,
-												'default'       => $avatar_default,
+												'size'    => $headshot_px,
+												'default' => $avatar_default,
 												'force_default' => true,
 											)
 										);

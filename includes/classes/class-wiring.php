@@ -43,6 +43,14 @@ use GatherPress\Core\Traits\Singleton;
 // Exit if accessed directly.
 defined( 'ABSPATH' ) || exit; // @codeCoverageIgnore
 
+/**
+ * Class Wiring
+ *
+ * Singleton that performs dynamic discovery and wiring at init:100.
+ *
+ * @since   0.1.0
+ * @package GatherPressRelations
+ */
 class Wiring {
 	use Singleton;
 

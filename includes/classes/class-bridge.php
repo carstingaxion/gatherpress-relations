@@ -40,6 +40,14 @@ use GatherPress\Core\Traits\Singleton;
 // Exit if accessed directly.
 defined( 'ABSPATH' ) || exit; // @codeCoverageIgnore
 
+/**
+ * Class Bridge
+ *
+ * Singleton that bridges external post types into the relations system.
+ *
+ * @since   0.1.0
+ * @package GatherPressRelations
+ */
 class Bridge {
 	use Singleton;
 
