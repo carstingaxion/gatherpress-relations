@@ -7,6 +7,9 @@
 
 	<exclude-pattern>*/build/*</exclude-pattern>
 	<exclude-pattern>*/vendor/*</exclude-pattern>
+	<exclude-pattern>*/.wordpress-org/*</exclude-pattern>
+
+	<exclude-pattern>*/wp-content/*</exclude-pattern>
 
 	<!-- Rules: figuren.theater Coding Standards -->
 	<rule ref="figurentheater" />
