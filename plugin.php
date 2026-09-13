@@ -3,7 +3,7 @@
  * Plugin Name:       GatherPress Relations
  * Plugin URI:        https://github.com/carstingaxion/gatherpress-relations
  * Description:       Connects persons to events (or any post type) with individual roles per relation.
- * Version:           0.1.0
+ * Version:           0.1.1
  * Requires at least: 6.4
  * Requires PHP:      8.0
  * Requires plugins:  gatherpress

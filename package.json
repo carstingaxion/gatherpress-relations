@@ -1,6 +1,6 @@
 {
     "name": "gatherpress-relations",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "description": "Connects persons to events (or any post type) with individual roles per relation.",
     "author": "carstenbach",
     "license": "GPL-2.0-or-later",
